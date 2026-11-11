@@ -244,7 +244,11 @@ code { font-family: var(--font-mono); font-size: .9em; background: var(--surface
 
 /* Drag demo: a looping animation of the browser — press the red button, drag it up to the
    bookmarks bar, let go, and the bookmark appears. Static arrow when motion is reduced. */
-.demo { margin: 0; max-width: 560px; display: flex; flex-direction: column; gap: 10px; }
+/* A dashed frame labelled 示範動畫, so nobody tries to drag the button in the picture. */
+.demo { position: relative; margin: 12px 0 0; max-width: 560px; display: flex; flex-direction: column; gap: 10px; padding: 22px 14px 14px; border: 2px dashed var(--line); border-radius: 14px; }
+.demo-tag { position: absolute; top: -14px; left: 14px; display: inline-flex; align-items: center; gap: 6px; padding: 3px 12px; border-radius: 999px; background: var(--ink); color: var(--surface); font-size: 13px; font-weight: 700; line-height: 1.5; white-space: nowrap; }
+.demo-tag svg { width: 10px; height: 10px; flex: none; fill: currentColor; }
+.demo-tag span { font-weight: 400; opacity: .8; }
 .demo-svg { display: block; width: 100%; height: auto; }
 .demo-svg text { font-family: var(--font-body); }
 .d-win { fill: var(--surface-2); stroke: var(--line); }
@@ -495,6 +499,7 @@ details.more-code[open] summary { margin-bottom: 8px; }
             <li><p>用滑鼠按住紅色的「抓取抽獎名單」按鈕不放，拖到書籤列上再放開。動畫示範了整個過程。</p></li>
           </ol>
           <figure class="demo" id="demo">
+            <figcaption class="demo-tag"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 1l7 4-7 4z"/></svg>示範動畫<span>・只是示範，不能拖</span></figcaption>
             <svg class="demo-svg" viewBox="0 0 560 236" role="img" aria-labelledby="demo-title">
               <title id="demo-title">動畫示範：用滑鼠按住紅色的「抓取抽獎名單」按鈕，往上拖到網址列下面的書籤列再放開，書籤列就會多一個「抓取抽獎名單」。</title>
               <rect class="d-win" x="0.5" y="0.5" width="559" height="235" rx="12"/>
