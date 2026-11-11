@@ -65,8 +65,8 @@ function bigList(n) {
   // The likes list links Amy differently (numeric id): still the same Amy, since only one Amy commented
   await pasteInto(page, '#paste', result('like', [{ name: 'Amy Lim', handle: 'fb:1000999' }, { name: 'Jason Tan', handle: 'fb:222' }]));
   await page.click('#btn-add');
-  await page.click('#r-like');
   await page.waitForTimeout(150);
+  check(await page.isChecked('#r-comment') && await page.isChecked('#r-like'), 'the comment and like lists ticked 需要留言 and 需要按讚');
   check(await txt(page, '#s-people') === '3' && await txt(page, '#s-eligible') === '2', 'a liker linked differently still meets the one Amy who commented; only the Jason who liked qualifies (eligible ' + await txt(page, '#s-eligible') + ')');
   // 排除 one Jason: the entry names the account, the other Jason keeps playing
   const jason222 = page.locator('#people .person', { has: page.locator('a[href*="id=222"]') });
@@ -78,7 +78,8 @@ function bigList(n) {
   check(await page.$eval('#r-exclude', n => n.value) === '' && await txt(page, '#s-eligible') === '2', '恢復 takes the entry out again');
   // X: different @handles are different people, even in different lists
   await page.click('#btn-clear-lists'); await page.click('#confirm-ok');
-  await page.click('#r-like');
+  await page.waitForTimeout(150);
+  check(!(await page.isChecked('#r-comment')) && !(await page.isChecked('#r-like')), '清空名單 unticks the list rules the lists ticked');
   await pasteInto(page, '#paste', result('comment', [{ name: 'Mei', handle: '@mei_1', text: 'hi' }], { platform: 'x' }));
   await page.click('#btn-add');
   await pasteInto(page, '#paste', result('like', [{ name: 'Mei', handle: '@mei_2' }], { platform: 'x' }));
@@ -180,6 +181,67 @@ function bigList(n) {
   await p3.click('#btn-add');
   check(await p3.isHidden('#recv-banner') && await txt(p3, '#s-people') === '1', 'a pasted list clears that note');
   await ctx3.close();
+
+  // ---------- A first giveaway, step by step: step 1 says what to do, the rules follow the lists ----------
+  const ctx4 = await browser.newContext({ viewport: { width: 1366, height: 620 } });
+  await serveSite(ctx4);
+  const p4 = await ctx4.newPage();
+  watch(p4, 'novice');
+  await p4.goto(url + '#setup');
+  await p4.waitForTimeout(300);
+  await p4.click('#btn-clear-sample');
+  await p4.waitForTimeout(150);
+  const ticks = () => p4.evaluate(() => ['r-comment', 'r-like', 'r-share'].map(id => document.getElementById(id).checked ? '1' : '0').join(''));
+  check(await p4.isVisible('#import-how') && await p4.isVisible('#quick-paste') && !(await p4.$eval('#more-import', d => d.open)) && await ticks() === '000',
+    'after 清除範例, step 1 shows how the lists arrive and a paste box, the other ways are folded, no list rule is ticked');
+  // A copied result pasted in 「送不過去的話」 goes straight in
+  await pasteInto(p4, '#quick-paste', result('comment', [{ name: 'Amy', handle: 'fb:1', text: '我要抽' }, { name: 'Ben', handle: 'fb:2', text: '我要抽' }]));
+  await p4.waitForTimeout(150);
+  check(await txt(p4, '#s-people') === '2' && await ticks() === '100' && await p4.$eval('#quick-paste', n => n.value) === '', 'a copied comment list pasted in 送不過去的話 goes straight in and ticks 需要留言');
+  check((await txt(p4, '#recv-title')).startsWith('已貼上 Facebook 的留言名單：加入 2 則留言') && (await txt(p4, '#recv-text')).includes('已勾選第 2 步的「需要留言」，不需要的話可以取消') && (await txt(p4, '#recv-text')).includes('還要抓按讚或分享的人'),
+    'the banner says what came in, which rule it ticked and what is left: ' + await txt(p4, '#recv-text'));
+  check(await p4.isHidden('#import-how') && (await txt(p4, '#import-next')).includes('還要抓按讚或分享的人'), 'step 1 then says what is left instead of the how-to');
+  // Ctrl+V anywhere on the page works too
+  await pasteInto(p4, 'body', result('like', [{ name: 'Amy', handle: 'fb:1' }]));
+  await p4.waitForTimeout(150);
+  check(await p4.locator('#batches .batch').count() === 2 && await ticks() === '110' && await txt(p4, '#s-eligible') === '1' && (await txt(p4, '#recv-text')).includes('還要抓分享的人'),
+    'a like list pasted anywhere on the page ticks 需要按讚 (eligible ' + await txt(p4, '#s-eligible') + ')');
+  await pasteInto(p4, 'body', result('share', [{ name: 'Ben', handle: 'fb:2' }]));
+  await p4.waitForTimeout(150);
+  check(await ticks() === '111' && (await txt(p4, '#recv-text')).includes('三份名單都到了') && (await txt(p4, '#import-next')).includes('三份名單都到了'), 'with all three lists in, the banner and step 1 say to check the rules and go draw');
+  // Removing a list unticks its rule; a rule set by hand stays as it is
+  await p4.uncheck('#r-share');
+  await p4.locator('#batches .batch', { has: p4.locator('.pill-like') }).locator('button').click();
+  await p4.click('#confirm-ok');
+  await p4.waitForTimeout(150);
+  check(await ticks() === '100' && (await txt(p4, '#toast')).includes('已取消第 2 步的「需要按讚」'), 'removing the like list unticks 需要按讚 and says so');
+  await p4.locator('#batches .batch', { has: p4.locator('.pill-share') }).locator('button').click();
+  await p4.click('#confirm-ok');
+  await p4.waitForTimeout(150);
+  await pasteInto(p4, 'body', result('share', [{ name: 'Ben', handle: 'fb:2' }]));
+  await p4.waitForTimeout(150);
+  check(await p4.locator('#batches .batch').count() === 2 && await ticks() === '100', '需要分享, unticked by hand, stays off when a share list comes again');
+  // Names that are not a copied result go to 手動貼上, opened
+  await pasteInto(p4, '#quick-paste', 'Carl\nDora');
+  await p4.waitForTimeout(300);
+  check(await p4.$eval('#more-import', d => d.open) && await p4.$eval('#paste', n => n.value) === 'Carl\nDora' && (await txt(p4, '#preview')).includes('讀到 2 筆') && await txt(p4, '#s-people') === '2',
+    'plain names pasted in the quick box open 手動貼上 with the names in it, nothing added yet');
+  // 抽出 1 位 fits a 1366×620 laptop screen: from 下一步：去抽獎 at the end of 準備, and from the 抽獎
+  // tab at the top of the page (which scrolls the page header away)
+  await p4.click('#btn-go-draw');
+  await p4.waitForTimeout(300);
+  const drawBtn = () => p4.$eval('#btn-draw', b => { const r = b.getBoundingClientRect(); return [Math.round(r.top), Math.round(r.bottom)]; });
+  const b1 = await drawBtn();
+  await p4.click('#btn-recv-ok');
+  await p4.click('.view-tab[data-view="setup"]');
+  await p4.evaluate(() => window.scrollTo(0, 0));
+  await p4.waitForTimeout(100);
+  await p4.click('.view-tab[data-view="draw"]');
+  await p4.waitForTimeout(300);
+  const b2 = await drawBtn();
+  const barOk = await p4.$eval('.views-bar', n => n.getBoundingClientRect().top >= 0 && n.getBoundingClientRect().bottom < 140);
+  check(b1[0] > 0 && b1[1] <= 620 && b2[0] > 0 && b2[1] <= 620 && barOk, '抽出 1 位 is on screen at 1366×620, with the tabs still there ' + JSON.stringify([b1, b2]));
+  await ctx4.close();
 
   check(!errors.length, 'no page errors ' + JSON.stringify(errors));
   await browser.close();

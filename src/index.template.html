@@ -369,19 +369,19 @@ details.more-code[open] summary { margin-bottom: 8px; }
 /* The full walkthrough for 留言＋按讚＋分享, above the per-platform cards */
 .combo { border-left: 4px solid var(--accent); }
 .combo ol.steps { max-width: 62em; }
+/* One platform at a time: Facebook / X / Threads tabs over its card (all three show without script) */
+.ptabs { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; border-radius: 10px; background: var(--surface-2); align-self: flex-start; max-width: 100%; }
+.ptabs button { border: 0; border-radius: 8px; background: transparent; color: var(--muted); font: inherit; font-size: 15px; padding: 7px 20px; cursor: pointer; }
+.ptabs button[aria-selected="true"] { background: var(--surface); color: var(--ink); font-weight: 700; box-shadow: 0 1px 2px rgba(0, 0, 0, .14); }
 .platforms { display: grid; gap: 16px; }
-@media (min-width: 820px) { .platforms { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-.platforms .card { gap: 12px; }
+.platforms .card { display: grid; gap: 12px 36px; }
+@media (min-width: 820px) { .platforms .card { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.platforms .card h3 { grid-column: 1 / -1; }
+.ptabs:not([hidden]) + .platforms .card h3 { display: none; }
+.pcol { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .platforms ol.steps { font-size: 14.5px; }
-.sub-h { font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: .06em; margin-top: 4px; }
+.sub-h { font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: .06em; }
 .platforms p, .platforms li { overflow-wrap: anywhere; }
-
-.draw-steps { display: grid; gap: 12px 24px; margin: 0; padding: 0; list-style: none; counter-reset: d; }
-@media (min-width: 820px) { .draw-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.draw-steps li { counter-increment: d; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; }
-.draw-steps li::before { content: counter(d); width: 28px; height: 28px; display: grid; place-items: center; border-radius: 7px; background: var(--accent); color: var(--on-accent); font-family: var(--font-mono); font-size: 13.5px; font-weight: 600; }
-.draw-steps b { display: block; }
-.draw-steps span { color: var(--muted); font-size: 14.5px; }
 
 .faq { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
 .faq details { padding: 0 18px; }
@@ -440,8 +440,8 @@ details.more-code[open] summary { margin-bottom: 8px; }
           <span id="resume-text"></span>
         </div>
         <div class="cta">
-          <a class="btn btn-primary btn-lg" id="cta-draw" href="draw.html">開始抽獎</a>
-          <a class="btn btn-lg" href="#start">第一次用？從這裡開始</a>
+          <a class="btn btn-primary btn-lg" id="cta-start" href="#start">第一次用？從這裡開始</a>
+          <a class="btn btn-lg" id="cta-draw" href="draw.html">開始抽獎</a>
         </div>
         <ul class="facts">
           <li>同一個人留言很多次只算一次</li>
@@ -449,7 +449,7 @@ details.more-code[open] summary { margin-bottom: 8px; }
           <li>條件：按讚、分享、標記、關鍵字</li>
           <li>複製得獎公告、下載 CSV 紀錄</li>
         </ul>
-        <p class="meta">抓取工具最新版 v__VERSION__・<a href="#whats-new">更新了什麼</a></p>
+        <p class="meta" id="meta-new" hidden>抓取工具最新版 v__VERSION__・<a href="#whats-new">更新了什麼</a></p>
       </div>
       <figure class="hero-art" aria-hidden="true">
         <div class="tk">
@@ -498,12 +498,13 @@ details.more-code[open] summary { margin-bottom: 8px; }
         <p>每台電腦、每個瀏覽器只要裝一次。請用電腦版的 Chrome、Edge、Safari 或 Firefox，手機不能裝。</p>
       </div>
 
-      <div class="update" id="whats-new" role="note">
+      <div class="update" id="whats-new" role="note" hidden>
         <h3>v__VERSION__ 更新了</h3>
         <ul>
-          <li>不用再複製、貼上：抓完按「送到抽獎系統」，名單會直接加進抽獎系統。抽獎已經開始的話，抽獎系統會提醒你，不會加進去。</li>
-          <li>抓完會自動停：工具會對照貼文上顯示的留言數或按讚數，抓到一樣多就停，畫面上會顯示「230 / 256」這樣的進度。</li>
-          <li>沒抓完會提醒：抓到的比貼文上的少，或你按了「停止」，按「繼續抓」就能接著抓，已經抓到的會留著，送過去的名單也會跟著更新。</li>
+          <li>不用再複製、貼上：抓完按「送到抽獎系統」，名單會直接加進抽獎系統。送不過去的話，按「複製結果」，再到抽獎系統第 1 步的「送不過去的話」框貼上就好。</li>
+          <li>抓完會自動停：工具會對照貼文上顯示的留言數或按讚數，抓到一樣多就停。抓到的比貼文上少很多，按「繼續抓」就能接著抓。</li>
+          <li>參加條件跟著名單走：送來按讚名單，抽獎系統會自動勾好「需要按讚」，留言、分享也一樣。不需要的話取消就好，你自己改過的條件不會再被動到。</li>
+          <li>工具面板更簡潔：頭像抓到幾張改成一行灰字，沒抓到的會用名字的第一個字代替，不影響抽獎。</li>
         </ul>
         <p><b>已經裝過舊版的話：</b>在書籤列的「抓取抽獎名單」上按右鍵，選「刪除」，再用下面的方法一重新拖一次。打開工具時，標題旁邊顯示「v__VERSION__」就是新版。</p>
       </div>
@@ -588,7 +589,7 @@ details.more-code[open] summary { margin-bottom: 8px; }
     <section class="section" id="use" aria-labelledby="h-use">
       <div class="sec-head">
         <h2 id="h-use">使用教學</h2>
-        <p>工具一次抓一份名單。留言、按讚、分享各抓一次，每抓完一份就按「送到抽獎系統」，名單會直接加進抽獎系統的第 1 步。同一個人在不同名單裡會自動合併成一位。</p>
+        <p>工具一次抓一份名單，抓完按「送到抽獎系統」就會加進抽獎系統。同一個人在不同名單裡會自動合併成一位。</p>
       </div>
       <div class="card combo" id="combo">
         <h3>想抽「留言＋按讚＋分享」都做到的人？</h3>
@@ -596,68 +597,78 @@ details.more-code[open] summary { margin-bottom: 8px; }
           <li><p><b>抓留言：</b>打開貼文，按書籤列的「抓取抽獎名單」。跑完按「送到抽獎系統」，抽獎系統會在新分頁打開，留言名單已經加進去了。</p></li>
           <li><p><b>抓按讚：</b>回到貼文的分頁，在工具上按「按讚」，再點開貼文的按讚名單，工具會自動開始抓。跑完一樣按「送到抽獎系統」。</p></li>
           <li><p><b>抓分享：</b>關掉按讚名單，在工具上按「分享」，再點開分享名單。跑完一樣按「送到抽獎系統」。</p></li>
-          <li><p><b>設條件：</b>到抽獎系統第 2 步「參加條件」，勾選「需要留言」「需要按讚」「需要分享」。只有三樣都做到的人會被抽到。</p></li>
+          <li><p><b>設條件：</b>名單送到後，抽獎系統會自動勾選第 2 步的「需要留言」「需要按讚」「需要分享」，確認一下就好。只有三樣都做到的人會被抽到。</p></li>
         </ol>
         <p class="note">工具已經關掉的話，也可以先點開按讚或分享的名單，再按書籤列的「抓取抽獎名單」，工具會自己認出是哪一種名單。</p>
       </div>
-      <h3 class="sub-title">各平台怎麼抓</h3>
+      <h3 class="sub-title" id="h-platforms">各平台怎麼抓</h3>
+      <div class="ptabs" id="ptabs" role="tablist" aria-labelledby="h-platforms" hidden>
+        <button type="button" role="tab" id="pt-fb" aria-controls="pp-fb" aria-selected="true">Facebook</button>
+        <button type="button" role="tab" id="pt-x" aria-controls="pp-x" aria-selected="false" tabindex="-1">X</button>
+        <button type="button" role="tab" id="pt-th" aria-controls="pp-th" aria-selected="false" tabindex="-1">Threads</button>
+      </div>
       <div class="platforms">
-        <div class="card">
+        <div class="card" id="pp-fb" role="tabpanel" aria-labelledby="pt-fb">
           <h3>Facebook</h3>
-          <p class="sub-h">留言</p>
-          <ol class="steps">
-            <li><p>打開那一則貼文。在動態上的話，先點貼文上的時間，進到單一貼文。</p></li>
-            <li><p>按書籤列的「抓取抽獎名單」。工具會把排序改成「所有留言」，並自動展開全部留言和回覆。</p></li>
-            <li><p>跑完後按「送到抽獎系統」。</p></li>
-          </ol>
-          <p class="sub-h">按讚和分享</p>
-          <ol class="steps">
-            <li><p>在工具上按「按讚」或「分享」。</p></li>
-            <li><p>點貼文下方表情符號旁邊的數字（分享就點「N 次分享」），跳出名單視窗後，工具會自動開始抓。</p></li>
-            <li><p>跑完後按「送到抽獎系統」。分享名單只列得出你看得到的分享，抽獎文可以請大家分享時設為公開。</p></li>
-          </ol>
+          <div class="pcol">
+            <p class="sub-h">留言</p>
+            <ol class="steps">
+              <li><p>打開那一則貼文。在動態上的話，先點貼文上的時間，進到單一貼文。</p></li>
+              <li><p>按書籤列的「抓取抽獎名單」。工具會把排序改成「所有留言」，並自動展開全部留言和回覆。</p></li>
+              <li><p>跑完後按「送到抽獎系統」。</p></li>
+            </ol>
+          </div>
+          <div class="pcol">
+            <p class="sub-h">按讚和分享</p>
+            <ol class="steps">
+              <li><p>在工具上按「按讚」或「分享」。</p></li>
+              <li><p>點貼文下方表情符號旁邊的數字（分享就點「N 次分享」），跳出名單視窗後，工具會自動開始抓。</p></li>
+              <li><p>跑完後按「送到抽獎系統」。分享名單只列得出你看得到的分享，抽獎文可以請大家分享時設為公開。</p></li>
+            </ol>
+          </div>
         </div>
-        <div class="card">
+        <div class="card" id="pp-x" role="tabpanel" aria-labelledby="pt-x">
           <h3>X</h3>
-          <p class="sub-h">回覆</p>
-          <ol class="steps">
-            <li><p>點進那一則貼文，網址會有 <code>/status/</code>。</p></li>
-            <li><p>按書籤，工具會往下捲動讀取所有回覆。你自己的回覆會自動略過。</p></li>
-            <li><p>跑完後按「送到抽獎系統」。</p></li>
-          </ol>
-          <p class="sub-h">按讚、轉發、引用</p>
-          <ol class="steps">
-            <li><p>在工具上按「按讚」。轉發和引用請按「分享」。</p></li>
-            <li><p>點貼文的按讚數或轉發數，打開名單頁（網址結尾是 <code>/likes</code>、<code>/retweets</code> 或 <code>/quotes</code>），工具會自動開始抓。</p></li>
-            <li><p>跑完後按「送到抽獎系統」。X 只讓貼文作者看到按讚名單。</p></li>
-          </ol>
+          <div class="pcol">
+            <p class="sub-h">回覆</p>
+            <ol class="steps">
+              <li><p>點進那一則貼文（只顯示那一則和它的回覆的頁面）。</p></li>
+              <li><p>按書籤，工具會往下捲動讀取所有回覆。你自己的回覆會自動略過。</p></li>
+              <li><p>跑完後按「送到抽獎系統」。</p></li>
+            </ol>
+          </div>
+          <div class="pcol">
+            <p class="sub-h">按讚、轉發、引用</p>
+            <ol class="steps">
+              <li><p>在工具上按「按讚」。轉發和引用請按「分享」。</p></li>
+              <li><p>點貼文的按讚數或轉發數，打開名單頁，工具會自動開始抓。</p></li>
+              <li><p>跑完後按「送到抽獎系統」。X 只讓貼文作者看到按讚名單。</p></li>
+            </ol>
+          </div>
         </div>
-        <div class="card">
+        <div class="card" id="pp-th" role="tabpanel" aria-labelledby="pt-th">
           <h3>Threads</h3>
-          <p class="sub-h">回覆</p>
-          <ol class="steps">
-            <li><p>點進那一則貼文，網址會有 <code>/post/</code>。</p></li>
-            <li><p>按書籤，工具會往下捲動讀取所有回覆。你自己的回覆會自動略過。</p></li>
-            <li><p>跑完後按「送到抽獎系統」。</p></li>
-          </ol>
-          <p class="sub-h">按讚和轉發</p>
-          <ol class="steps">
-            <li><p>在工具上按「按讚」。轉發請按「分享」。</p></li>
-            <li><p>點貼文下方的讚數或「動態」，跳出名單視窗後，工具會自動開始抓。</p></li>
-            <li><p>跑完後按「送到抽獎系統」。</p></li>
-          </ol>
+          <div class="pcol">
+            <p class="sub-h">回覆</p>
+            <ol class="steps">
+              <li><p>點進那一則貼文（只顯示那一則和它的回覆的頁面）。</p></li>
+              <li><p>按書籤，工具會往下捲動讀取所有回覆。你自己的回覆會自動略過。</p></li>
+              <li><p>跑完後按「送到抽獎系統」。</p></li>
+            </ol>
+          </div>
+          <div class="pcol">
+            <p class="sub-h">按讚和轉發</p>
+            <ol class="steps">
+              <li><p>在工具上按「按讚」。轉發請按「分享」。</p></li>
+              <li><p>點貼文下方的讚數或「動態」，跳出名單視窗後，工具會自動開始抓。</p></li>
+              <li><p>跑完後按「送到抽獎系統」。</p></li>
+            </ol>
+          </div>
         </div>
       </div>
       <h3 class="sub-title">抽獎</h3>
       <div class="card">
-        <p class="note">抽獎系統分成兩頁：「準備」頁做第 1～3 步，做好按「下一步：去抽獎」，到「抽獎」頁抽出得獎者。</p>
-        <ol class="draw-steps">
-          <li><p><b>匯入參加者</b><span>在抓取工具按「送到抽獎系統」，名單就會出現在第 1 步。也可以把「複製結果」貼到第 1 步，或直接貼名字、匯入 CSV 檔。旁邊的參加者名單會馬上列出每一位。</span></p></li>
-          <li><p><b>參加條件</b><span>勾選要留言、按讚、分享、標記幾位好友、包含關鍵字，也能排除小編。參加者名單會標出誰符合資格，也可以一位一位按「排除」。</span></p></li>
-          <li><p><b>獎品</b><span>設定每個獎項的名稱和名額。</span></p></li>
-          <li><p><b>抽獎台</b><span>在「抽獎」頁按「抽出 1 位」。抽出的人會移出抽獎池，不會重複中獎。可以開全螢幕給大家看。</span></p></li>
-          <li><p><b>得獎名單</b><span>「複製得獎公告」貼到貼文，「下載 CSV 紀錄」留存。聯絡不上的得獎者可以作廢再補抽。</span></p></li>
-        </ol>
+        <p>抽獎系統分成兩頁：「準備」頁看名單、確認參加條件、設定獎品；「抽獎」頁按「抽出 1 位」，抽完可以複製得獎公告、下載 CSV 紀錄。每一步在頁面上都有說明。</p>
         <div class="row"><a class="btn btn-primary" href="draw.html">開始抽獎</a><p class="note">第一次打開會有範例資料，可以先試抽；按「清除範例，開始使用」就換成你的名單。</p></div>
       </div>
     </section>
@@ -670,8 +681,8 @@ details.more-code[open] summary { margin-bottom: 8px; }
         <details><summary>要辦下一次抽獎怎麼做？</summary><p>抽獎系統一次保存一場抽獎。先把這次的結果下載 CSV 保存，再到得獎名單下面按「清除全部資料」，就能從第 1 步重新開始。</p></details>
         <details><summary>抽獎公平嗎？</summary><p>抽獎用瀏覽器內建的密碼學亂數，每位符合資格的人機會都一樣。同一個人留言很多次也只算一次，抽出的人會移出抽獎池。每次抽出都會記下時間和當時抽獎池人數，CSV 紀錄裡都有。</p></details>
         <details><summary>抓的時候可以切到別的分頁嗎？</summary><p>請不要。瀏覽器會把背景分頁放慢，工具可能停住或抓不完整。留言很多時要等幾分鐘，跑完會顯示「送到抽獎系統」按鈕。</p></details>
-        <details><summary>按讚和分享的人要怎麼抓？</summary><p>先照平常抓完留言，然後在工具上按「按讚」或「分享」，再點開貼文的按讚或分享名單，工具會自動開始抓。三份名單都貼到抽獎系統後，在第 2 步勾選要哪些條件。完整步驟在上面的<a href="#combo">使用教學</a>。</p></details>
-        <details><summary>按「送到抽獎系統」沒有反應？</summary><p>瀏覽器擋住新分頁的話，工具會改成複製，請打開抽獎系統，在第 1 步貼上，按「加入名單」。有些網站不讓兩個分頁互相傳資料，工具會提醒你，這時請按「複製結果」，再到抽獎系統第 1 步貼上。抽出第一位得獎者之後名單會鎖住，抽獎系統不會再加名單，要加的話請先按「重新開始抽獎」。</p></details>
+        <details><summary>按讚和分享的人要怎麼抓？</summary><p>先照平常抓完留言，然後在工具上按「按讚」或「分享」，再點開貼文的按讚或分享名單，工具會自動開始抓。名單送到抽獎系統後，第 2 步會自動勾選對應的條件，不需要的可以取消。完整步驟在上面的<a href="#combo">使用教學</a>。</p></details>
+        <details><summary>按「送到抽獎系統」沒有反應？</summary><p>瀏覽器擋住新分頁的話，工具會改成複製，請打開抽獎系統，點第 1 步「送不過去的話」的框，按 Ctrl+V（Mac 按 ⌘V）貼上。有些網站不讓兩個分頁互相傳資料，工具會提醒你，這時請按「複製結果」，一樣貼到那個框。抽出第一位得獎者之後名單會鎖住，抽獎系統不會再加名單，要加的話請先按「重新開始抽獎」。</p></details>
         <details><summary>抓到 0 則或數量不對怎麼辦？</summary><p>先確認打開的是單一貼文。工具會對照貼文上顯示的數量，抓到的比較少就會提醒，按「繼續抓」可以接著抓；差幾則通常是已刪除或你看不到的留言。抓按讚或分享時，要等名單視窗打開，工具才會開始抓。還是不對的話，按工具上的「複製診斷資訊」，連同哪個平台一起<a href="__REPO_URL__/issues" target="_blank" rel="noopener">回報問題</a>。</p></details>
         <details><summary>名單會被傳到別的地方嗎？</summary><p>不會。工具只讀你畫面上的內容（頭像會從同一個網站的圖片伺服器再讀一次，用來縮小）。按「送到抽獎系統」時，名單是在你自己的瀏覽器裡，從貼文的分頁直接交給抽獎系統的分頁；按「複製結果」則是放到你的剪貼簿。兩種都不會傳到其他伺服器。</p></details>
         <details><summary>有些頭像沒抓到？</summary><p>有的網站不讓其他網頁讀取圖片。抓不到的人，在抽獎系統會用名字的第一個字代替，不影響抽獎。工具跑完會顯示「頭像 幾 / 幾 張」。</p></details>
@@ -709,7 +720,18 @@ details.more-code[open] summary { margin-bottom: 8px; }
     try { s = JSON.parse(localStorage.getItem(SUMMARY_KEY) || 'null'); } catch (e) { /* storage unavailable */ }
     var box = document.getElementById('resume');
     var cta = document.getElementById('cta-draw');
-    if (!s || s.sample || !(s.people > 0)) {
+    var returning = !!s && !s.sample && s.people > 0;
+    // A first visit starts with 第一次用; someone with a giveaway goes back to it. Only they had an
+    // older tool, so only they see what changed.
+    var start = document.getElementById('cta-start');
+    cta.classList.toggle('btn-primary', returning);
+    start.classList.toggle('btn-primary', !returning);
+    start.textContent = returning ? '看使用教學' : '第一次用？從這裡開始';
+    start.setAttribute('href', returning ? '#use' : '#start');
+    if (returning) cta.parentNode.insertBefore(cta, start); else cta.parentNode.insertBefore(start, cta);
+    document.getElementById('whats-new').hidden = !returning;
+    document.getElementById('meta-new').hidden = !returning;
+    if (!returning) {
       box.hidden = true;
       cta.textContent = '開始抽獎';
       return;
@@ -756,6 +778,30 @@ details.more-code[open] summary { margin-bottom: 8px; }
       });
     }
   }
+
+  // Platform tabs: one card at a time. Arrow keys move between the tabs.
+  var ptabs = document.getElementById('ptabs');
+  var tabs = Array.prototype.slice.call(ptabs.querySelectorAll('[role="tab"]'));
+  function pickTab(t, focus) {
+    tabs.forEach(function (b) {
+      var on = b === t;
+      b.setAttribute('aria-selected', String(on));
+      b.tabIndex = on ? 0 : -1;
+      document.getElementById(b.getAttribute('aria-controls')).hidden = !on;
+    });
+    if (focus) t.focus();
+  }
+  tabs.forEach(function (b, i) {
+    b.addEventListener('click', function () { pickTab(b); });
+    b.addEventListener('keydown', function (e) {
+      var j = e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowLeft' ? i - 1 : e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : null;
+      if (j === null) return;
+      e.preventDefault();
+      pickTab(tabs[(j + tabs.length) % tabs.length], true);
+    });
+  });
+  ptabs.hidden = false;
+  pickTab(tabs[0]);
 
   var link = document.getElementById('bookmarklet');
   var code = link.getAttribute('href');

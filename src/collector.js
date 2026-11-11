@@ -5,7 +5,7 @@
 (function () {
   'use strict';
   // Keep in step with COLLECTOR_VERSION in draw.html (build.js checks).
-  var VERSION = '1.4';
+  var VERSION = '1.5';
   // The 抽獎系統 page, filled in by build.js from the site address.
   var DRAW_URL = '__DRAW_URL__';
   var DRAW_ORIGIN = (DRAW_URL.match(/^https:\/\/[^/]+/) || [''])[0];
@@ -803,6 +803,10 @@
 
   var status = mk('div', { fontSize: '13px', color: C.muted });
   panel.appendChild(status);
+  // The avatars found, in small grey type: missing ones are normal, so no warning colours. 複製診斷資訊
+  // sits at the end of the line, for the developer when many are missing.
+  var avLine = mk('div', { display: 'none', fontSize: '12px', color: C.muted, marginTop: '-6px' });
+  panel.appendChild(avLine);
   var tip = mk('div', { fontSize: '12.5px', background: C.soft, color: C.ink, borderRadius: '8px', padding: '8px 10px', display: 'none', whiteSpace: 'pre-line' });
   panel.appendChild(tip);
   // A run that may have missed some (fewer than the post says, stopped, or out of time): 繼續抓.
@@ -826,6 +830,19 @@
   close.addEventListener('click', function () { host.__gcStop(); host.remove(); });
 
   function setStatus(s) { status.textContent = s; }
+  function setAvLine(res) {
+    while (avLine.firstChild) avLine.removeChild(avLine.firstChild);
+    css(avLine, { display: res ? 'block' : 'none' });
+    if (!res) return;
+    avLine.appendChild(document.createTextNode(res.av));
+    if (!res.diag) return;
+    var b = mk('button', { border: '0', background: 'transparent', padding: '0', marginLeft: '6px', font: 'inherit', color: C.muted, textDecoration: 'underline', cursor: 'pointer' }, '複製診斷資訊');
+    b.type = 'button';
+    b.addEventListener('click', function () { copyText(res.diag, function () { showOk('✓ 已複製診斷資訊，可以直接貼給開發者。'); }); });
+    avLine.appendChild(b);
+  }
+  // The key that pastes, as the draw page names it
+  var PASTE_KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '') ? '⌘V' : 'Ctrl+V';
   function setTip(s) { tip.textContent = s || ''; css(tip, { display: s ? 'block' : 'none' }); }
   // withLink adds an 「打開抽獎系統」 button under the message (after copying the result).
   // warn: orange, for a result the 抽獎系統 could not take.
@@ -857,7 +874,7 @@
   function markCopied() {
     if (box.style.display !== 'none') { setTip(''); css(box, { display: 'none' }); }
     if (S.summary) setStatus(S.summary);
-    showOk('✓ 已複製成功！請到抽獎系統第 1 步貼上，再按「加入名單」。', true);
+    showOk('✓ 已複製成功！到抽獎系統第 1 步，點「送不過去的話」的框，按 ' + PASTE_KEY + ' 貼上，名單就會加進去。', true);
     showNext(true);
     var b = copyBtn;
     if (!b) return;
@@ -945,6 +962,7 @@
     renderMode();
     where.textContent = PLATFORM_LABEL[platform] + '・' + (k === 'comment' ? '等你回到貼文' : '等你打開名單');
     css(countRow, { display: 'none' });
+    setAvLine(null);
     showOk('');
     showMore('');
     showNext(false);
@@ -982,6 +1000,7 @@
     css(countRow, { display: 'flex' });
     setCount(res.n, res.e, res.own);
     setStatus(res.summary);
+    setAvLine(res);
     setTip(res.tip);
     showOk('');
     showMore(res === S.lastRes ? res.more : '');
@@ -991,11 +1010,6 @@
     if (DRAW_ORIGIN && !S.noSend) acts.push({ label: '送到抽獎系統', primary: true, onClick: function () { sendToDraw(res, this); } });
     acts.push({ label: '複製結果', primary: !acts.length, copy: true, onClick: function () { copyText(res.text, markCopied); } });
     acts.push({ label: '重新抓取', primary: false, onClick: function () { choose(res.kind, true); } });
-    if (res.diag) {
-      acts.push({ label: '複製診斷資訊', primary: false, onClick: function () {
-        copyText(res.diag, function () { showOk('✓ 已複製診斷資訊，可以直接貼給開發者。'); });
-      } });
-    }
     setActions(acts);
   }
   function showMore(s) {
@@ -1023,7 +1037,7 @@
     if (!on) return;
     var left = ['comment', 'like', 'share'].filter(function (k) { return !S.results[k]; });
     if (!left.length) {
-      nextBox.textContent = '留言、按讚、分享三份名單都抓好了。都加進抽獎系統之後，記得在第 2 步勾選參加條件。';
+      nextBox.textContent = '留言、按讚、分享三份名單都抓好了。都送到抽獎系統之後，到第 2 步確認參加條件（會跟著名單自動勾好），就可以去抽獎了。';
       return;
     }
     nextBox.appendChild(document.createTextNode('還要抓' + left.map(function (k) { return KIND_LABEL[k]; }).join('或') + '的人，就按：'));
@@ -1132,6 +1146,7 @@
     renderMode();
     css(countRow, { display: 'flex' });
     updateCount();
+    setAvLine(null);
     setTip(S.notes.join('\n'));
     showOk('');
     showMore('');
@@ -1240,7 +1255,6 @@
       ? '抓到 ' + n + ' 則留言，共 ' + people.length + ' 位不重複。'
       : '抓到 ' + n + ' 位' + (S.kind === 'like' ? '按讚' : '分享') + '的人。';
     if (S.skippedOwner.size) summary += '已略過貼文作者自己的 ' + S.skippedOwner.size + ' 則回覆。';
-    summary += '頭像 ' + avOk + ' / ' + people.length + ' 張。';
     if (!S.at) S.at = new Date().toISOString();
     var text = resultText();
     try { window.__giveawayResult = text; } catch (e) { /* ignore */ }
@@ -1248,7 +1262,7 @@
     // Read without a likes / shares list open (「名單已經打開了」 on a page with none).
     if (S.kind !== 'comment' && !inDialog() && !onListPage()) tips.push('沒有找到名單視窗，結果可能把頁面上的其他人（例如留言的人）也算進去，請確認人數對不對。');
     var fewAvatars = avOk < people.length / 2;
-    if (fewAvatars) tips.push('有些頭像抓不到（網站不讓其他網頁讀取圖片），抽獎系統會用名字的第一個字代替，不影響抽獎。');
+    var av = '頭像 ' + avOk + ' / ' + people.length + ' 張' + (avOk < people.length ? '，沒抓到的會用名字的第一個字代替，不影響抽獎。' : '。');
     // Fewer than the post says, stopped, or out of time: say so, with 繼續抓
     var e = S.expect, own = got() - n, short = e ? e.n - got() : 0;
     var goOnText = '按「繼續抓」可以接著抓，已經抓到的會留著。';
@@ -1258,7 +1272,7 @@
         (S.kind === 'share' ? '不公開的分享看不到，少一些是正常的。' : '差幾個是正常的（已刪除或看不到的）。') + '差很多的話，' + goOnText;
     } else if (more) more += goOnText;
     else if (!e) more = '比貼文上的數量少？' + goOnText;
-    var res = { kind: S.kind, n: n, e: e, own: own, text: text, summary: summary, tip: tips.join('\n'), more: more, diag: fewAvatars ? diagText() : '' };
+    var res = { kind: S.kind, n: n, e: e, own: own, text: text, summary: summary, av: av, tip: tips.join('\n'), more: more, diag: fewAvatars ? diagText() : '' };
     S.results[S.kind] = res;
     S.lastRes = res;
     showResult(res);

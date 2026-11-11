@@ -13,7 +13,7 @@ Facebook、X、Threads 貼文抽獎工具。抓下貼文的留言、按讚和分
 
 1. 在[首頁](https://xiiao5777.github.io/socialMedia-draw/#install)把「抓取抽獎名單」按鈕拖到瀏覽器的書籤列（每台電腦裝一次）。
 2. 打開 Facebook、X 或 Threads 的貼文，按書籤列的「抓取抽獎名單」。工具會對照貼文上的數量，抓完自動停，再按「送到抽獎系統」，名單就會加進[抽獎頁](https://xiiao5777.github.io/socialMedia-draw/draw.html)（也可以按「複製結果」自己貼上）。要抓按讚或分享的人，就在工具上按「按讚」或「分享」，再點開貼文的那份名單，工具會自動開始抓。
-3. 在抽獎頁的「準備」頁設定條件和獎品，再到「抽獎」頁按「抽出 1 位」。
+3. 在抽獎頁的「準備」頁確認參加條件（會跟著送來的名單自動勾好）和獎品，再到「抽獎」頁按「抽出 1 位」。
 
 各平台的詳細步驟和常見問題都在首頁。遇到問題請到 [Issues](https://github.com/xiiao5777/socialMedia-draw/issues) 回報。
 

@@ -39,7 +39,18 @@ const sample = (name) => {
   const anchors = await home.$$eval('a[href^="#"]', as => as.map(a => a.getAttribute('href')));
   const brokenAnchors = await home.evaluate((hs) => hs.filter(h => !document.getElementById(h.slice(1))), anchors);
   check(anchors.length >= 6 && !brokenAnchors.length, 'home: every # link has a target ' + JSON.stringify(brokenAnchors));
-  check((await htxt('.meta')).includes('v' + VER) && (await htxt('#whats-new h3')) === 'v' + VER + ' 更新了', 'home: shows the newest tool version v' + VER);
+  const ctas = (p) => p.$$eval('.cta a', as => as.map(a => a.id + (a.classList.contains('btn-primary') ? '*' : '') + ' ' + a.textContent + ' ' + a.getAttribute('href')));
+  check((await ctas(home)).join('|') === 'cta-start* 第一次用？從這裡開始 #start|cta-draw 開始抽獎 draw.html', 'home: a first visit leads with 第一次用？從這裡開始 ' + JSON.stringify(await ctas(home)));
+  check((await htxt('#meta-new')).includes('v' + VER) && (await htxt('#whats-new h3')) === 'v' + VER + ' 更新了' && await home.isHidden('#meta-new') && await home.isHidden('#whats-new'), 'home: the v' + VER + ' 更新了 box waits for people who used it before');
+  const tabState = () => home.evaluate(() => ['pt-fb', 'pt-x', 'pt-th'].map(id => document.getElementById(id).getAttribute('aria-selected') === 'true' ? '1' : '0').join('') + ' ' + ['pp-fb', 'pp-x', 'pp-th'].filter(id => !document.getElementById(id).hidden).join());
+  check(await home.isVisible('#ptabs') && await tabState() === '100 pp-fb', 'home: the platform guides are tabs, Facebook first (' + await tabState() + ')');
+  await home.click('#pt-x');
+  check(await tabState() === '010 pp-x', 'home: the X tab shows the X guide');
+  await home.keyboard.press('ArrowRight');
+  check(await tabState() === '001 pp-th' && await home.evaluate(() => document.activeElement.id) === 'pt-th', 'home: arrow keys move between the tabs');
+  await home.click('#pt-fb');
+  const homeH = await home.evaluate(() => document.documentElement.scrollHeight);
+  check(homeH < 4200, 'home: the page is shorter (' + homeH + 'px at 1280 wide)');
   const combo = await home.$$eval('#combo ol.steps > li', ls => ls.map(l => l.textContent));
   check(combo.length === 4 && combo[0].includes('送到抽獎系統') && combo[1].includes('在工具上按「按讚」') && combo[3].includes('需要留言') && combo[3].includes('需要分享'), 'home: step-by-step 留言＋按讚＋分享 walkthrough ' + JSON.stringify(combo.map(t => t.slice(0, 6))));
   check(!(await home.$eval('#use', m => m.textContent)).includes('跑完後按「複製結果」') && await home.isHidden('#phone-note'), 'home: the guides say 送到抽獎系統; no phone note on a computer');
@@ -92,7 +103,7 @@ const sample = (name) => {
   check(page.url() === SITE + 'draw.html' && await page.isVisible('#sample-banner'), 'draw: 開始抽獎 opens the draw page with the sample giveaway');
   const nav = await page.$$eval('.sitenav a', as => as.map(a => a.href));
   check(nav.join() === [SITE, SITE + '#use', SITE + '#install'].join(), 'draw: navigation back to the homepage ' + JSON.stringify(nav));
-  check(await page.$eval('.callout a', a => [a.href, a.target].join()) === SITE + '#install,_blank', 'draw: 安裝抓取工具 opens the install section in a new tab');
+  check(await page.$eval('.how-foot a', a => [a.href, a.target].join()) === SITE + '#install,_blank', 'draw: 先安裝抓取工具 opens the install section in a new tab');
   check((await txt('.sitefoot')).includes('v' + VER) && await page.$eval('.sitefoot a[href*="issues"]', a => a.href) === REPO + '/issues', 'draw: footer shows v' + VER + ' and links to 回報問題');
 
   // A real paste: the big JSON stays out of the text box, which shows a summary instead.
@@ -173,6 +184,7 @@ const sample = (name) => {
   await home2.waitForTimeout(300);
   const resume = await home2.$eval('#resume-text', n => n.textContent);
   check(await home2.isVisible('#resume') && /^參加者 55 位，全部 1 名都抽完了/.test(resume) && await home2.$eval('#cta-draw', a => a.textContent) === '查看抽獎結果', 'home: returning visitor sees last giveaway (' + resume.slice(0, 30) + ')');
+  check((await ctas(home2)).join('|') === 'cta-draw* 查看抽獎結果 draw.html|cta-start 看使用教學 #use' && await home2.isVisible('#whats-new') && await home2.isVisible('#meta-new'), 'home: a returning visitor gets 繼續 first and the 更新了 box ' + JSON.stringify(await ctas(home2)));
   // Start the draw over in the draw tab: the homepage line follows without reloading
   await page.click('#btn-reset'); await page.click('#confirm-ok');
   await page.waitForTimeout(500);
@@ -207,7 +219,7 @@ const sample = (name) => {
   check((await page.textContent('#confirm-title')) === '清除全部資料？' && (await page.textContent('#confirm-text')).includes('無法復原'), 'draw: 清除全部資料 asks in a dialog first');
   await page.click('#confirm-ok');
   await page.waitForTimeout(200);
-  check(page.url().endsWith('#setup') && await page.isVisible('#paste'), 'draw: 清除全部資料 goes back to 準備');
+  check(page.url().endsWith('#setup') && await page.isVisible('#import-how'), 'draw: 清除全部資料 goes back to 準備');
   const evil = { giveaway: 'list', v: 1, tool: VER, platform: 'x', kind: 'comment', page: 'https://x.com/a/status/1', at: '2026-11-11T05:00:00Z',
     items: [{ name: 'Evil', handle: '@evil', text: '我要抽 @a @b', url: 'javascript:alert(1)', link: 'https://evil.example/x' }],
     avatars: { '@evil': 'data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==' } };
