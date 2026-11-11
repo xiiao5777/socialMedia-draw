@@ -173,7 +173,7 @@ const sample = (name) => {
   const resume = await home2.$eval('#resume-text', n => n.textContent);
   check(await home2.isVisible('#resume') && /^參加者 55 位，全部 1 名都抽完了/.test(resume) && await home2.$eval('#cta-draw', a => a.textContent) === '查看抽獎結果', 'home: returning visitor sees last giveaway (' + resume.slice(0, 30) + ')');
   // Start the draw over in the draw tab: the homepage line follows without reloading
-  await page.click('#btn-reset'); await page.click('#btn-reset');
+  await page.click('#btn-reset'); await page.click('#confirm-ok');
   await page.waitForTimeout(500);
   const resume2 = await home2.$eval('#resume-text', n => n.textContent);
   check(/^參加者 55 位，還沒開始抽/.test(resume2) && await home2.$eval('#cta-draw', a => a.textContent) === '繼續抽獎', 'home: 繼續抽獎 line updates live from the draw tab (' + resume2.slice(0, 20) + ')');
@@ -202,7 +202,9 @@ const sample = (name) => {
 
   // A crafted result cannot sneak in script links or non-image data
   await page.click('.view-tab[data-view="draw"]');
-  await page.click('#btn-wipe'); await page.click('#btn-wipe');
+  await page.click('#btn-wipe');
+  check((await page.textContent('#confirm-title')) === '清除全部資料？' && (await page.textContent('#confirm-text')).includes('無法復原'), 'draw: 清除全部資料 asks in a dialog first');
+  await page.click('#confirm-ok');
   await page.waitForTimeout(200);
   check(page.url().endsWith('#setup') && await page.isVisible('#paste'), 'draw: 清除全部資料 goes back to 準備');
   const evil = { giveaway: 'list', v: 1, tool: VER, platform: 'x', kind: 'comment', page: 'https://x.com/a/status/1', at: '2026-11-11T05:00:00Z',

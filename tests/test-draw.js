@@ -69,7 +69,7 @@ const url = SITE + 'draw.html';
   check(/抽獎池還有 13 位/.test(await txt('#pool-line')), 'pool shrinks to 13 after a draw');
   check(await page.isDisabled('#paste'), 'import locked after drawing starts');
   check(await page.isDisabled('#r-like'), 'rules locked after drawing starts');
-  check(await page.locator('#people .p-side .btn').count() === 0 && await page.isDisabled('#btn-clear-lists'), 'no 排除 or 全部移除 once the draw has started');
+  check(await page.locator('#people .p-side .btn').count() === 0 && await page.isDisabled('#btn-clear-lists'), 'no 排除 or 清空名單 once the draw has started');
   await page.screenshot({ path: path.join(OUT, 'shot-draw-desktop.png'), fullPage: true });
 
   // Locked rules stay readable: a ticked box keeps its colour, rules that are not used step back
@@ -89,16 +89,27 @@ const url = SITE + 'draw.html';
   check(await view() === 'draw' && await page.isVisible('#stage'), 'the back button returns to the 抽獎 view');
   check((await txt('#rule-sum .rs-edit')) === '查看條件', 'rule summary offers 查看條件 once locked');
 
-  // Void the first winner (two-step)
+  // Void the first winner: a red button that asks in a dialog first
   const voidBtn = page.locator('#winners .wrow button').first();
   const red = await voidBtn.evaluate(n => [getComputedStyle(n).color, getComputedStyle(n).borderTopColor].join());
   check(red === 'rgb(174, 35, 35),rgb(174, 35, 35)', '作廢 is red ' + red);
   await voidBtn.click();
-  const armed = await voidBtn.evaluate(n => [getComputedStyle(n).backgroundColor, getComputedStyle(n).color].join());
-  check((await voidBtn.textContent()).includes('確定作廢') && armed === 'rgb(198, 43, 43),rgb(255, 255, 255)', 'void asks for confirmation on solid red ' + armed);
-  await voidBtn.click();
+  const dlg = await page.evaluate(() => ({ title: document.getElementById('confirm-title').textContent, text: document.getElementById('confirm-text').textContent, ok: document.getElementById('confirm-ok').textContent, focus: document.activeElement.id, okBg: getComputedStyle(document.getElementById('confirm-ok')).backgroundColor }));
+  check(await page.isVisible('#confirm') && dlg.title === '作廢「' + first + '」的得獎資格？' && dlg.text.includes('空出 1 個名額') && dlg.ok === '作廢' && dlg.okBg === 'rgb(198, 43, 43)', '作廢 asks in a dialog with a red 作廢 button ' + JSON.stringify(dlg));
+  check(dlg.focus === 'confirm-cancel', 'the dialog starts on 取消, so Enter alone does not void');
+  await page.waitForTimeout(250); // let the dialog finish fading in
+  await page.screenshot({ path: path.join(OUT, 'shot-draw-confirm.png') });
+  await page.click('#confirm-cancel');
   await page.waitForTimeout(100);
-  check(await page.locator('#winners .wrow.void').count() === 1, 'winner voided');
+  check(await page.isHidden('#confirm') && await page.locator('#winners .wrow.void').count() === 0, '取消 keeps the winner');
+  await voidBtn.click();
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(100);
+  check(await page.isHidden('#confirm') && await page.locator('#winners .wrow.void').count() === 0, 'Esc keeps the winner');
+  await voidBtn.click();
+  await page.click('#confirm-ok');
+  await page.waitForTimeout(100);
+  check(await page.isHidden('#confirm') && await page.locator('#winners .wrow.void').count() === 1, 'winner voided after 作廢 in the dialog');
   check((await txt('#s-drawn')).startsWith('0 /'), 'drawn count back to 0');
 
   // Redraw first prize, then finish the rest
@@ -142,9 +153,14 @@ const url = SITE + 'draw.html';
   const logCount = await txt('#log-count');
   check(Number(logCount) === 9, 'log has start + 7 draws + 1 void = 9 (got ' + logCount + ')');
 
-  // Reset (two-step)
+  // Reset asks first; a click on the dimmed page around the dialog cancels
   await page.click('#btn-reset');
+  check((await txt('#confirm-title')) === '重新開始抽獎？' && (await txt('#confirm-text')).includes('已抽出的 7 筆結果會清除') && (await txt('#confirm-text')).includes('下載 CSV 紀錄'), 'reset asks in a dialog and suggests saving the CSV first');
+  await page.mouse.click(6, 6);
+  await page.waitForTimeout(100);
+  check(await page.isHidden('#confirm') && (await txt('#s-drawn')) === '6 / 6', 'a click outside the dialog cancels');
   await page.click('#btn-reset');
+  await page.click('#confirm-ok');
   await page.waitForTimeout(100);
   check((await txt('#s-drawn')) === '0 / 6', 'reset clears winners');
   check(!(await page.isDisabled('#paste')), 'reset unlocks import');
@@ -203,14 +219,28 @@ const url = SITE + 'draw.html';
   await page.click('#btn-add-prize');
   check(await page.locator('#prize-list .prize-row').count() === 2, 'prize added');
 
-  // 全部移除: one button (pressed twice) clears every imported list; the rules and prizes stay
+  // 移除 on one list asks in a dialog too
   check((await txt('#batches .batches-title')) === '已匯入的名單（5 份）', 'the import step counts the lists');
-  await page.click('#btn-clear-lists');
-  check((await txt('#btn-clear-lists')) === '確定全部移除？', '全部移除 asks for confirmation');
-  await page.click('#btn-clear-lists');
+  const lastBatch = page.locator('#batches .batch').last();
+  const lastType = await lastBatch.locator('.pill').textContent();
+  await lastBatch.locator('button').click();
+  check((await txt('#confirm-title')) === '移除這份' + lastType + '名單？' && (await txt('#confirm-ok')) === '移除', '移除 asks in a dialog (' + lastType + ')');
+  await page.click('#confirm-ok');
   await page.waitForTimeout(100);
-  check(await txt('#s-people') === '0' && await page.locator('#batches .batch').count() === 0 && await page.isChecked('#r-like') && await page.$eval('#r-exclude', n => n.value) === 'eve' && await page.locator('#prize-list .prize-row').count() === 2, '全部移除 clears the lists and keeps the rules and prizes');
-  check((await txt('#toast')).includes('已移除全部 5 份名單'), '全部移除 says what it did');
+  check(await page.locator('#batches .batch').count() === 4 && (await txt('#toast')).includes('已移除這份' + lastType + '名單'), '移除 takes out that one list');
+  const left = await txt('#s-people');
+
+  // 清空名單 at the top of step 1: asks in a dialog, then clears every imported list; the rules and prizes stay
+  const beside = await page.evaluate(() => Math.round(document.getElementById('btn-clear-lists').getBoundingClientRect().top - document.getElementById('h-import').getBoundingClientRect().top));
+  check(await page.isVisible('#btn-clear-lists') && Math.abs(beside) <= 12, '清空名單 sits beside the step 1 title (' + beside + 'px)');
+  await page.click('#btn-clear-lists');
+  check((await txt('#confirm-title')) === '清空全部名單？' && (await txt('#confirm-text')).includes('4 份名單（' + left + ' 位參加者）') && (await txt('#confirm-ok')) === '清空名單', '清空名單 asks in a dialog: ' + await txt('#confirm-text'));
+  await page.waitForTimeout(250); // let the dialog finish fading in
+  await page.screenshot({ path: path.join(OUT, 'shot-draw-clear-dialog.png') });
+  await page.click('#confirm-ok');
+  await page.waitForTimeout(100);
+  check(await txt('#s-people') === '0' && await page.locator('#batches .batch').count() === 0 && await page.isChecked('#r-like') && await page.$eval('#r-exclude', n => n.value) === 'eve' && await page.locator('#prize-list .prize-row').count() === 2, '清空名單 clears the lists and keeps the rules and prizes');
+  check((await txt('#toast')).includes('已移除全部 4 份名單') && await page.isHidden('#btn-clear-lists'), '清空名單 says what it did, then hides until there is a list again');
 
   // ---------- Animated draw + mobile + dark screenshots ----------
   const ctx2 = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, colorScheme: 'dark' });
@@ -223,6 +253,14 @@ const url = SITE + 'draw.html';
   const order = await p2.evaluate(() => ['#sec-import', '#sec-people', '#sec-rules', '#sec-prizes', '#next-bar'].map(s => Math.round(document.querySelector(s).getBoundingClientRect().top)));
   check(order.every((y, i) => i === 0 || y > order[i - 1]), 'phones: import, roster, rules, prizes, 去抽獎 from top to bottom ' + JSON.stringify(order));
   await p2.screenshot({ path: path.join(OUT, 'shot-draw-mobile-dark-setup.png'), fullPage: true });
+  await p2.click('#btn-clear-lists');
+  const box2 = await p2.$eval('#confirm', n => { const r = n.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.right), Math.round(r.top), Math.round(r.bottom)]; });
+  check((await p2.textContent('#confirm-title')) === '清除範例資料？' && box2[0] >= 16 && box2[1] <= 374 && box2[2] >= 0 && box2[3] <= 844, 'phones: the confirm dialog fits the screen ' + JSON.stringify(box2));
+  await p2.waitForTimeout(250); // let the dialog finish fading in
+  await p2.screenshot({ path: path.join(OUT, 'shot-draw-mobile-dark-confirm.png') });
+  await p2.click('#confirm-cancel');
+  await p2.waitForTimeout(100);
+  check(await p2.isVisible('#sample-banner') && (await p2.textContent('#s-people')) === '23', 'phones: 取消 keeps the sample');
   await p2.click('#btn-try');
   await p2.waitForTimeout(200);
   const btn = await p2.$eval('#btn-draw', n => { const r = n.getBoundingClientRect(); return [Math.round(r.top), Math.round(r.bottom)]; });
@@ -237,7 +275,7 @@ const url = SITE + 'draw.html';
   await p2.locator('#stage').screenshot({ path: path.join(OUT, 'shot-draw-mobile-dark-stage.png') });
   await p2.screenshot({ path: path.join(OUT, 'shot-draw-mobile-dark.png'), fullPage: true });
 
-  // 全部移除 on the sample data clears the sample as a whole (its made-up rules and prizes too)
+  // 清空名單 on the sample data clears the sample as a whole (its made-up rules and prizes too)
   const ctx3 = await browser.newContext({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1 });
   await serveSite(ctx3);
   const p3 = await ctx3.newPage();
@@ -245,10 +283,10 @@ const url = SITE + 'draw.html';
   await p3.goto(url);
   await p3.waitForTimeout(300);
   await p3.click('#btn-clear-lists');
-  await p3.click('#btn-clear-lists');
+  await p3.click('#confirm-ok');
   await p3.waitForTimeout(100);
   const s3 = await p3.evaluate(() => ({ people: document.getElementById('s-people').textContent, banner: document.getElementById('sample-banner').hidden, like: document.getElementById('r-like').checked, prizes: document.querySelectorAll('#prize-list .prize-row').length, exclude: document.getElementById('r-exclude').value }));
-  check(s3.people === '0' && s3.banner && !s3.like && s3.prizes === 1 && s3.exclude === '', '全部移除 on the sample clears the sample data ' + JSON.stringify(s3));
+  check(s3.people === '0' && s3.banner && !s3.like && s3.prizes === 1 && s3.exclude === '', '清空名單 on the sample clears the sample data ' + JSON.stringify(s3));
   await ctx3.close();
 
   check(!errors.length, 'no page errors ' + JSON.stringify(errors));
