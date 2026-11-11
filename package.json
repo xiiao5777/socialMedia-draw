@@ -6,7 +6,7 @@
   "scripts": {
     "build": "node build.js",
     "check": "node build.js --check",
-    "test": "node build.js --check && node tests/test-collector.js && node tests/test-draw.js && node tests/test-site.js"
+    "test": "node build.js --check && node tests/test-collector.js && node tests/test-draw.js && node tests/test-lists.js && node tests/test-site.js"
   },
   "devDependencies": {
     "esbuild": "0.24.0",
