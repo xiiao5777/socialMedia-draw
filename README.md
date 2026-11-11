@@ -23,6 +23,7 @@ Facebook、X、Threads 貼文抽獎工具。抓下貼文的留言、按讚和分
 | --- | --- |
 | `index.html` | 首頁：安裝說明、使用教學、常見問題。由 `build.js` 產生，請改 `src/index.template.html` |
 | `draw.html` | 抽獎頁 |
+| `theme.js` | 黑底／白底切換，兩個頁面共用，選擇存在瀏覽器裡 |
 | `src/index.template.html` | 首頁的原始檔 |
 | `src/collector.js` | 名單抓取工具（書籤）的原始碼 |
 | `build.js` | 把抓取工具壓縮成書籤網址，填進首頁 |

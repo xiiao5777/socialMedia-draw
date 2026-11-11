@@ -206,6 +206,61 @@ const sample = (name) => {
   check(await page.isHidden('#tool-banner'), 'draw: 知道了 dismisses the banner for good');
   await ctx.close();
 
+  // ---------- 黑底／白底 ----------
+  for (const f of ['index.html', 'draw.html']) {
+    const html = fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
+    check(html.indexOf('<script src="theme.js"></script>') > 0 && html.indexOf('<script src="theme.js"></script>') < html.indexOf('<style>'), f + ': theme.js runs before the styles, so a dark choice never flashes white');
+  }
+  const ctxT = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: 'light' });
+  await serveSite(ctxT);
+  const th = await ctxT.newPage();
+  watch(th, 'theme');
+  await th.goto(SITE);
+  await th.waitForTimeout(200);
+  const look = (p) => p.evaluate(() => ({
+    theme: document.documentElement.getAttribute('data-theme'),
+    bg: getComputedStyle(document.body).backgroundColor,
+    label: Array.from(document.querySelectorAll('#theme-toggle > span')).filter(s => getComputedStyle(s).display !== 'none').map(s => s.textContent).join(),
+    meta: Array.from(document.querySelectorAll('meta[name="theme-color"]')).map(m => m.content).join()
+  }));
+  const LIGHT = 'rgb(242, 244, 247)', DARK = 'rgb(17, 21, 28)';
+  let l = await look(th);
+  check(l.theme === null && l.bg === LIGHT && l.label === '切換成黑底', 'theme: light computer shows 白底 and offers 黑底 ' + JSON.stringify(l));
+  await th.click('#theme-toggle');
+  l = await look(th);
+  check(l.theme === 'dark' && l.bg === DARK && l.label === '切換成白底' && l.meta === '#11151C,#11151C', 'theme: 黑底 button turns the homepage dark ' + JSON.stringify(l));
+  await th.screenshot({ path: path.join(OUT, 'shot-theme-home-dark.png') });
+  await th.reload();
+  await th.waitForTimeout(200);
+  l = await look(th);
+  check(l.theme === 'dark' && l.bg === DARK, 'theme: the choice is remembered after reload');
+  const thDraw = await ctxT.newPage();
+  watch(thDraw, 'theme-draw');
+  await thDraw.goto(SITE + 'draw.html');
+  await thDraw.waitForTimeout(300);
+  l = await look(thDraw);
+  check(l.theme === 'dark' && l.bg === DARK && l.label === '切換成白底', 'theme: the draw page uses the same choice ' + JSON.stringify(l));
+  await thDraw.screenshot({ path: path.join(OUT, 'shot-theme-draw-dark.png') });
+  await thDraw.click('#theme-toggle');
+  await thDraw.waitForTimeout(300);
+  l = await look(thDraw);
+  const homeAfter = await look(th);
+  check(l.theme === 'light' && l.bg === LIGHT && homeAfter.theme === 'light' && homeAfter.bg === LIGHT, 'theme: 白底 on the draw page also switches the open homepage tab');
+  await thDraw.screenshot({ path: path.join(OUT, 'shot-theme-draw-light.png'), clip: { x: 0, y: 0, width: 1280, height: 260 } });
+  await ctxT.close();
+  const ctxD = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: 'dark' });
+  await serveSite(ctxD);
+  const td = await ctxD.newPage();
+  watch(td, 'theme-dark');
+  await td.goto(SITE);
+  await td.waitForTimeout(200);
+  l = await look(td);
+  check(l.theme === null && l.bg === DARK && l.label === '切換成白底', 'theme: dark computer starts dark and offers 白底 ' + JSON.stringify(l));
+  await td.click('#theme-toggle');
+  l = await look(td);
+  check(l.theme === 'light' && l.bg === LIGHT && l.label === '切換成黑底' && l.meta === '#F2F4F7,#F2F4F7', 'theme: 白底 overrides the dark computer ' + JSON.stringify(l));
+  await ctxD.close();
+
   // ---------- Phones, dark mode, reduced motion ----------
   const ctxM = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark', deviceScaleFactor: 1 });
   await serveSite(ctxM);
@@ -216,7 +271,7 @@ const sample = (name) => {
   const ov = await pm.evaluate(() => document.documentElement.scrollWidth - innerWidth);
   const bg = await pm.evaluate(() => getComputedStyle(document.body).backgroundColor);
   check(ov <= 0 && bg === 'rgb(17, 21, 28)', 'home: no horizontal overflow on phones, dark background (' + ov + ', ' + bg + ')');
-  check(await pm.isVisible('.topnav .btn') && await pm.isHidden('.topnav a[href="#faq"]'), 'home: phones keep only 開始抽獎 in the top bar');
+  check(await pm.isVisible('.topnav .btn') && await pm.isVisible('#theme-toggle') && await pm.isHidden('.topnav a[href="#faq"]'), 'home: phones keep 黑底／白底 and 開始抽獎 in the top bar');
   await pm.screenshot({ path: path.join(OUT, 'shot-home-mobile-dark.png'), fullPage: true });
   await pm.goto(SITE + 'draw.html');
   await pm.waitForTimeout(300);

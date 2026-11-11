@@ -8,6 +8,7 @@
 <meta name="theme-color" content="#F2F4F7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#11151C" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<script src="theme.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700;900&display=swap">
@@ -152,9 +153,23 @@ button { font: inherit; }
   transform: rotate(-6deg);
 }
 .tagline { color: var(--muted); max-width: 46ch; }
-.sitenav { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 14px; }
+.sitenav { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 18px; font-size: 14px; }
 .sitenav a { color: var(--muted); text-decoration: none; }
 .sitenav a:hover { color: var(--accent-text); text-decoration: underline; text-underline-offset: 3px; }
+/* 黑底／白底 button (theme.js). It shows the look you switch to. */
+.theme-toggle { display: inline-flex; align-items: center; min-height: 34px; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; line-height: 1.2; cursor: pointer; white-space: nowrap; }
+.theme-toggle:hover { border-color: var(--muted); }
+.theme-toggle > span { display: inline-flex; align-items: center; gap: 6px; }
+.theme-toggle svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.theme-toggle .tt-dark { display: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .theme-toggle .tt-light { display: none; }
+  :root:not([data-theme="light"]) .theme-toggle .tt-dark { display: inline-flex; }
+}
+:root[data-theme="dark"] .theme-toggle .tt-light { display: none; }
+:root[data-theme="dark"] .theme-toggle .tt-dark { display: inline-flex; }
+.sitenav .theme-toggle { min-height: 30px; padding: 3px 11px; font-size: 13.5px; color: var(--muted); }
+.sitenav .theme-toggle:hover { color: var(--ink); }
 .sitefoot { display: flex; flex-wrap: wrap; gap: 4px 8px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
 .sitefoot a { color: var(--muted); }
 .stats { display: grid; grid-template-columns: repeat(4, auto); gap: 4px 28px; margin: 0; }
@@ -729,6 +744,10 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
         <a href="./">← 回首頁</a>
         <a href="./#use">使用教學</a>
         <a href="./#install">安裝抓取工具</a>
+        <button class="theme-toggle" type="button" id="theme-toggle" title="切換黑底／白底">
+          <span class="tt-light"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z"/></svg><span class="sr-only">切換成</span>黑底</span>
+          <span class="tt-dark"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg><span class="sr-only">切換成</span>白底</span>
+        </button>
       </nav>
     </div>
     <dl class="stats">
