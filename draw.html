@@ -355,7 +355,7 @@ a.btn { text-decoration: none; }
 }
 .lock-note a { color: var(--accent-text); font-weight: 500; }
 
-input[type="text"], input[type="number"], input[type="search"], textarea, select {
+input[type="text"], input[type="number"], input[type="search"], input[type="datetime-local"], textarea, select {
   font: inherit;
   font-size: 14px;
   color: var(--ink);
@@ -538,6 +538,9 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
 .rule-extra { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-left: 30px; font-size: 14px; }
 .rule-extra input[type="number"] { width: 76px; }
 .rule-extra input[type="text"] { flex: 1 1 150px; }
+.rule-extra input[type="datetime-local"] { flex: 0 1 220px; }
+.rule-note { margin: 0; padding-left: 30px; font-size: 12.5px; line-height: 1.55; color: var(--muted); }
+.rule-note.warn { color: var(--warn); }
 .rule:has(> label input:not(:checked)) .rule-extra { opacity: .55; }
 /* Locked during a draw: what was typed stays readable, and rules that are not used step back. */
 .rules input:not([type="checkbox"]):disabled, .rules select:disabled, #r-exclude:disabled {
@@ -616,6 +619,8 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
 .who .handle { font-weight: 400; color: var(--muted); font-size: 12.5px; margin-left: 6px; }
 .who .meta { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 12px; color: var(--muted); }
 .who .reasons { font-size: 12px; color: var(--warn); }
+.who .meta .unsure { color: var(--warn); }
+.who .meta a { color: inherit; text-underline-offset: 2px; }
 .person-empty { padding: 14px 12px; color: var(--muted); font-size: 14px; }
 .who .name a { color: inherit; text-decoration: none; }
 .who .name a:hover { text-decoration: underline; text-underline-offset: 3px; }
@@ -1096,6 +1101,15 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
                 </select>
               </div>
             </li>
+            <li class="rule">
+              <label><input type="checkbox" id="r-time"><span><b>留言截止時間</b><small>截止後的留言不算。按讚和分享沒有時間，不受影響。</small></span></label>
+              <div class="rule-extra">
+                <label for="r-time-at">只算</label>
+                <input type="datetime-local" id="r-time-at">
+                <span>之前的留言</span>
+              </div>
+              <p class="rule-note" id="r-time-note" hidden></p>
+            </li>
           </ul>
           <div class="field">
             <label class="field-label" for="r-exclude">排除名單</label>
@@ -1240,7 +1254,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
   var STALE_MS = 12 * 3600 * 1000;  // a page not heard from for 12 hours was killed, not just asleep
   // Newest 名單抓取工具 version; build.js refuses to build when it differs from src/collector.js.
   // A pasted result from an older tool shows a banner asking to reinstall the bookmark.
-  var COLLECTOR_VERSION = '1.7';
+  var COLLECTOR_VERSION = '1.8';
   var TYPE_LABEL = { comment: '留言', like: '按讚', share: '分享' };
   var PLATFORM_LABEL = { facebook: 'Facebook', x: 'X', threads: 'Threads' };
   var PLACEHOLDER = {
@@ -1392,6 +1406,13 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
       var url = safeUrl(i.url), link = safeUrl(i.link);
       if (url) rec.url = url;
       if (link) rec.link = link;
+      // When the comment was left: t (exact, X / Threads), or t0..t1 with the site's label tt
+      // (Facebook says only 「1天」). Kept short: a list can have tens of thousands of comments.
+      if (o.kind === 'comment') {
+        var t = timeMs(i.time), t0 = timeMs(i.timeFrom), t1 = timeMs(i.timeTo);
+        if (t) rec.t = t;
+        else if (t0 && t1 && t0 <= t1) { rec.t0 = t0; rec.t1 = t1; if (i.timeText) rec.tt = String(i.timeText).slice(0, 30); }
+      }
       records.push(rec);
     });
     var avatars = new Map();
@@ -1410,6 +1431,10 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
       records: records,
       avatars: avatars
     };
+  }
+  function timeMs(v) {
+    var n = v ? Date.parse(String(v)) : NaN;
+    return isFinite(n) && n > 946684800000 && n < 4102444800000 ? n : 0;
   }
   // The giveaway a platform's lists go to ('' for none: they join the giveaway on screen)
   function gidOf(platform) { return { facebook: 'facebook', x: 'x', twitter: 'x', threads: 'threads' }[platform] || ''; }
@@ -1518,7 +1543,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
 
   // ---------- State ----------
   function defaultRules() {
-    return { needComment: false, needLike: false, needShare: false, needTag: false, tagCount: 1, needKeyword: false, keywords: '', keywordMode: 'any', exclude: '' };
+    return { needComment: false, needLike: false, needShare: false, needTag: false, tagCount: 1, needKeyword: false, keywords: '', keywordMode: 'any', exclude: '', needBefore: false, before: '' };
   }
   function makeEmpty() {
     return {
@@ -2113,7 +2138,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
           p = sameName(cands, r, hk, b.id);
         }
         if (!p) {
-          p = { key: hk ? 'h:' + hk : 'n:' + nk, name: r.name, handle: r.handle || '', url: '', comments: [], low: [], links: [], liked: false, shared: false, mentions: new Set(), lists: new Set() };
+          p = { key: hk ? 'h:' + hk : 'n:' + nk, name: r.name, handle: r.handle || '', url: '', comments: [], low: [], links: [], times: [], tts: [], tagLists: [], liked: false, shared: false, mentions: new Set(), lists: new Set() };
           order.push(p);
         }
         if (hk) {
@@ -2132,6 +2157,9 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
           p.comments.push(r.text || '');
           p.low.push(info.low);
           p.links.push(r.link || '');
+          p.times.push(r.t ? [r.t, r.t] : r.t0 ? [r.t0, r.t1] : null);
+          p.tts.push(r.tt || '');
+          p.tagLists.push(info.tags);
           info.tags.forEach(function (t) { p.mentions.add(t); });
         } else if (b.type === 'like') p.liked = true;
         else if (b.type === 'share') p.shared = true;
@@ -2153,11 +2181,29 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
   // The comment shown for a winner: the first one with the keyword when that rule is on.
   function bestComment(p) {
     var R = state.rules, kws = R.needKeyword ? keywordList() : [];
+    // With a 截止時間, only the comments left before it
+    var idx = p.onTime || p.comments.map(function (c, i) { return i; });
     var i = -1;
-    if (kws.length) i = p.low.findIndex(function (t) { return matchKeywords([t], kws, R.keywordMode); });
-    if (i < 0) i = p.comments.findIndex(function (c) { return String(c).trim(); });
-    if (i < 0 && p.comments.length) i = 0;
-    return i < 0 ? { text: '', link: '' } : { text: p.comments[i] || '', link: (p.links && p.links[i]) || '' };
+    if (kws.length) i = idx.find(function (j) { return matchKeywords([p.low[j]], kws, R.keywordMode); });
+    if (i == null || i < 0) i = idx.find(function (j) { return String(p.comments[j]).trim(); });
+    if (i == null || i < 0) i = idx.length ? idx[0] : -1;
+    return i < 0 ? { text: '', link: '', time: null } : { text: p.comments[i] || '', link: (p.links && p.links[i]) || '', time: (p.times && p.times[i]) || null };
+  }
+  // 留言截止時間: the last moment that counts (the end of the minute set), or null when not in use.
+  // The time is the browser's local time, as the person typed it.
+  function deadline() {
+    var R = state.rules;
+    if (!R.needBefore || !R.before) return null;
+    var t = Date.parse(R.before);
+    return isFinite(t) ? t + 59999 : null;
+  }
+  // A comment's time against the deadline: 'ok', 'late', 'unsure' (a Facebook 「1天」 that spans
+  // it) or 'none' (no time: an older 抓取工具, typed in, or from a file)
+  function timeVs(tm, limit) {
+    if (!tm) return 'none';
+    if (tm[1] <= limit) return 'ok';
+    if (tm[0] > limit) return 'late';
+    return 'unsure';
   }
   function evaluate() {
     var built = buildPeople();
@@ -2165,19 +2211,48 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     var kws = R.needKeyword ? keywordList() : [];
     var excl = new Set(splitList(R.exclude).map(exclKey));
     var ticket = 0;
+    // 留言截止時間: comments left after it do not count for any rule. One whose time is not sure,
+    // or not known, counts (and is marked), so nobody is left out on a guess.
+    var limit = deadline(), late = 0, unsure = 0, noTime = 0;
     built.people.forEach(function (p) {
+      var on = null;
+      p.late = 0;
+      p.unsure = 0;
+      p.unsureAt = -1;
+      if (limit !== null && p.comments.length) {
+        on = [];
+        p.times.forEach(function (tm, i) {
+          var k = timeVs(tm, limit);
+          if (k === 'late') { p.late++; late++; return; }
+          on.push(i);
+          if (k === 'unsure') { p.unsure++; unsure++; if (p.unsureAt < 0) p.unsureAt = i; }
+          else if (k === 'none') noTime++;
+        });
+      }
+      p.onTime = on;
+      var lows = on ? on.map(function (i) { return p.low[i]; }) : p.low;
+      var mentions = p.mentions;
+      if (on) {
+        mentions = new Set();
+        on.forEach(function (i) { p.tagLists[i].forEach(function (t) { mentions.add(t); }); });
+      }
+      var allLate = !!on && !on.length;
+      p.tagged = mentions.size;
       var reasons = [];
       if (excl.has(normKey(p.name)) || (p.handle && excl.has(normKey(p.handle)))) reasons.push('在排除名單');
       if (R.needComment && !p.comments.length) reasons.push('沒有留言');
+      if (allLate && (R.needComment || R.needTag || R.needKeyword)) reasons.push('截止時間後才留言');
       if (R.needLike && !p.liked) reasons.push('沒有按讚');
       if (R.needShare && !p.shared) reasons.push('沒有分享');
-      if (R.needTag && p.mentions.size < R.tagCount) reasons.push('只標記 ' + p.mentions.size + ' 位（需要 ' + R.tagCount + ' 位）');
-      if (R.needKeyword && kws.length && !matchKeywords(p.low, kws, R.keywordMode)) reasons.push('留言沒有關鍵字');
+      if (!allLate) {
+        if (R.needTag && mentions.size < R.tagCount) reasons.push('只標記 ' + mentions.size + ' 位（需要 ' + R.tagCount + ' 位）');
+        if (R.needKeyword && kws.length && !matchKeywords(lows, kws, R.keywordMode)) reasons.push('留言沒有關鍵字');
+      }
       p.reasons = reasons;
       p.eligible = reasons.length === 0;
       p.ticket = p.eligible ? ++ticket : 0;
     });
-    return { people: built.people, commentCount: built.commentCount, eligibleCount: ticket };
+    return { people: built.people, commentCount: built.commentCount, eligibleCount: ticket, limit: limit, late: late, unsure: unsure, noTime: noTime };
   }
   function poolOf(ev) {
     var drawn = new Set(state.winners.map(function (w) { return w.key; }));
@@ -2207,6 +2282,8 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     if (R.needTag) parts.push('需標記 ' + R.tagCount + ' 位');
     var kws = splitList(R.keywords);
     if (R.needKeyword && kws.length) parts.push('留言含「' + kws.join('」' + (R.keywordMode === 'all' ? '和「' : '或「')) + '」');
+    var limit = deadline();
+    if (limit !== null) parts.push('只算 ' + fmtShort(limit) + ' 前的留言');
     var ex = splitList(R.exclude).length;
     if (ex) parts.push('排除 ' + ex + ' 人');
     return parts;
@@ -2275,10 +2352,30 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     if (bigLists()) renderTimer = setTimeout(renderAll, 200);
     else renderAll();
   }
+  // Under 留言截止時間: what it left out, and what it could not tell
+  function renderTimeNote(ev) {
+    var n = $('#r-time-note'), R = state.rules, text = '', warn = false;
+    if (R.needBefore && ev.limit === null) { text = '填好截止時間才會生效。'; warn = true; }
+    else if (ev.limit !== null) {
+      text = '截止時間是 ' + fmtDate(ev.limit) + '，' + (ev.late ? '之後的 ' + ev.late + ' 則留言不算。' : '沒有留言在這之後。');
+      if (ev.unsure) {
+        text += '有 ' + ev.unsure + ' 則 Facebook 留言只顯示「1天」這種時間，分不出在截止前還是後，先算進去，參加者名單上標著「留言時間不確定」，可以點「看留言」確認。';
+        warn = true;
+      }
+      if (ev.noTime) {
+        text += '有 ' + ev.noTime + ' 則留言沒有時間（舊版抓取工具抓的、手動貼上或匯入檔案的），先算進去；要準確的話，請用新版抓取工具重新抓留言。';
+        warn = true;
+      }
+    }
+    n.textContent = text;
+    n.hidden = !text;
+    n.classList.toggle('warn', warn);
+  }
   function renderAll() {
     clearTimeout(renderTimer);
     var ev = evaluate();
     renderStats(ev);
+    renderTimeNote(ev);
     $('#sample-banner').hidden = !state.sample;
     renderToolBanner();
     renderBatches();
@@ -2473,7 +2570,14 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     if (p.comments.length) meta.push(p.comments.length > 1 ? '留言 ' + p.comments.length + ' 則（算 1 次）' : '留言');
     if (p.liked) meta.push('按讚');
     if (p.shared) meta.push('分享');
-    if (p.mentions.size) meta.push('標記 ' + p.mentions.size + ' 位');
+    var tagged = p.tagged != null ? p.tagged : p.mentions.size;
+    if (tagged) meta.push('標記 ' + tagged + ' 位');
+    if (p.late && p.reasons.indexOf('截止時間後才留言') === -1) meta.push(p.onTime && p.onTime.length ? '截止後的 ' + p.late + ' 則不算' : '留言都在截止時間後');
+    if (p.unsure) {
+      var ul = safeUrl(p.links[p.unsureAt]);
+      meta.push(el('span', { class: 'unsure' }, '留言時間不確定' + (p.tts[p.unsureAt] ? '（' + p.tts[p.unsureAt] + '）' : ''),
+        ul ? ['，', extLink(ul, '看留言 ↗', '在 Facebook 把滑鼠移到留言的時間上，會顯示確切時間')] : null));
+    }
     if (p.namesake) meta.push('有同名的人');
     var status;
     if (w) status = el('span', { class: 'pill ' + (w.void ? 'pill-void' : 'pill-won') }, w.void ? '已作廢' : '已得獎');
@@ -2493,7 +2597,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
       avatarEl(p),
       el('div', { class: 'who' },
         el('div', { class: 'name' }, href ? extLink(href, p.name, '打開個人檔案') : p.name, showHandle ? el('span', { class: 'handle' }, p.handle) : null),
-        meta.length ? el('div', { class: 'meta' }, meta.map(function (m) { return el('span', null, m); })) : null,
+        meta.length ? el('div', { class: 'meta' }, meta.map(function (m) { return typeof m === 'string' ? el('span', null, m) : m; })) : null,
         p.reasons.length ? el('div', { class: 'reasons' }, p.reasons.join('、')) : null
       ),
       el('div', { class: 'p-side' }, status, act)
@@ -2814,6 +2918,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
       ticketText: fmtTicket(pick.ticket, ev.eligibleCount),
       comment: best.text,
       link: best.link,
+      ct: best.time,
       url: pick.url || '',
       at: Date.now(),
       pool: pool.length,
@@ -2862,12 +2967,17 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     if (/^[=+\-@]/.test(s)) s = "'" + s;
     return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   }
+  // A comment's time for the CSV: exact, or the span Facebook's 「1天」 allows
+  function commentTime(ct) {
+    if (!Array.isArray(ct) || !isFinite(ct[0]) || !isFinite(ct[1])) return '';
+    return ct[0] === ct[1] ? fmtDate(ct[0], true) : '約 ' + fmtDate(ct[0]) + ' ~ ' + fmtDate(ct[1]);
+  }
   function resultCSV() {
-    var rows = [['獎項', '名次', '抽獎編號', '名字', '帳號', '個人檔案連結', '留言', '留言連結', '狀態', '抽出時間', '當時抽獎池人數', '作廢時間']];
+    var rows = [['獎項', '名次', '抽獎編號', '名字', '帳號', '個人檔案連結', '留言', '留言連結', '留言時間', '狀態', '抽出時間', '當時抽獎池人數', '作廢時間']];
     state.prizes.forEach(function (p) {
       var rank = 0;
       state.winners.filter(function (w) { return w.prizeId === p.id; }).forEach(function (w) {
-        rows.push([prizeName(p), w.void ? '' : String(++rank), w.ticketText, w.name, isAtHandle(w.handle) ? w.handle : '', safeUrl(w.url), w.comment || '', safeUrl(w.link), w.void ? '作廢' : '有效', fmtDate(w.at, true), String(w.pool), w.void && w.voidAt ? fmtDate(w.voidAt, true) : '']);
+        rows.push([prizeName(p), w.void ? '' : String(++rank), w.ticketText, w.name, isAtHandle(w.handle) ? w.handle : '', safeUrl(w.url), w.comment || '', safeUrl(w.link), commentTime(w.ct), w.void ? '作廢' : '有效', fmtDate(w.at, true), String(w.pool), w.void && w.voidAt ? fmtDate(w.voidAt, true) : '']);
       });
     });
     return '\uFEFF' + rows.map(function (r) { return r.map(csvCell).join(','); }).join('\r\n');
@@ -2883,7 +2993,9 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     ['needKeyword', '#r-kw', 'check'],
     ['keywords', '#r-kw-text', 'text'],
     ['keywordMode', '#r-kw-mode', 'text'],
-    ['exclude', '#r-exclude', 'text']
+    ['exclude', '#r-exclude', 'text'],
+    ['needBefore', '#r-time', 'check'],
+    ['before', '#r-time-at', 'text']
   ];
 
   // The 需要留言／按讚／分享 rule follows its lists until the person sets it by hand: on when the first
@@ -3171,6 +3283,8 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
         if (key === 'needComment' || key === 'needLike' || key === 'needShare') state.ui.ruleSet[key] = true;
         if (key === 'keywords' && n.value.trim() && !state.rules.needKeyword) { state.rules.needKeyword = true; $('#r-kw').checked = true; }
         if (key === 'tagCount' && !state.rules.needTag) { state.rules.needTag = true; $('#r-tag').checked = true; }
+        if (key === 'before' && n.value && !state.rules.needBefore) { state.rules.needBefore = true; $('#r-time').checked = true; }
+        if (key === 'needBefore' && n.checked && !state.rules.before) $('#r-time-at').focus();
         save();
         if (evName === 'input') renderSoon(); else renderAll();
       });

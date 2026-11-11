@@ -11,7 +11,7 @@ function fbComment(c) {
     <a href="https://www.facebook.com/${c.path}${q(c.path)}${id}&amp;__tn__=R" role="link" aria-label="${c.name}" tabindex="-1"><svg width="32" height="32" style="width:32px;height:32px"><mask id="m-${c.id}"><circle cx="16" cy="16" r="16" fill="white"></circle></mask><g mask="url(#m-${c.id})"><image x="0" y="0" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" xlink:href="https://scontent.xx.fbcdn.net/v/t39.30808-1/${c.path.replace(/\W/g, '_')}${c.path === 'jason.tan.9' ? '_nocors' : ''}_n.jpg?stp=cp0_dst-jpg_s32x32&amp;_nc_cat=1&amp;oh=00_AbC&amp;oe=6740"></image></g></svg></a>
     <div><span><a href="https://www.facebook.com/${c.path}${q(c.path)}${id}&amp;__cft__=z" role="link"><span>${c.name}</span></a></span></div>
     <div><span lang="zh-Hant" dir="auto"><div><div dir="auto" style="text-align:start">${c.text}${tags}${c.photo ? '<div><a href="https://www.facebook.com/photo/?fbid=777"><img src="https://scontent.xx.fbcdn.net/v/t39.30808-6/photo_777_n.jpg" width="220" height="160" alt="可能是 1 張圖片"></a></div>' : ''}${c.long ? '<span class="rest" hidden> 這是被收起來的後半段</span> <div role="button" class="seemore">查看更多</div>' : ''}</div></div></span></div>
-    <ul><li><div role="button">讚</div></li><li><div role="button">回覆</div></li><li><a href="https://www.facebook.com/brandpage/posts/pfbid0abc?${id}">1天</a></li></ul>
+    <ul><li><div role="button">讚</div></li><li><div role="button">回覆</div></li><li><a href="https://www.facebook.com/brandpage/posts/pfbid0abc?${id}">${c.when || '1天'}</a></li></ul>
     ${c.replies ? `<div class="replies" data-for="${c.id}"></div><div role="button" class="show-replies" data-for="${c.id}"><span>查看全部 ${c.replies.length} 則回覆</span></div>` : ''}
   </div>`;
 }
@@ -31,6 +31,7 @@ function fbPostPage() {
     tags: i % 5 === 3 ? [] : [P((i + 1) % 20), P((i + 2) % 20)],
     long: i === 4,
     photo: i === 6,
+    when: ['3小時', '1天', '2天', '5分鐘', '1週', '2h'][i % 6],
     replies: i === 1 ? [{ id: 'R1', name: people[2][0], path: people[2][1], text: '我也要抽', tags: [P(0)] }, { id: 'R2', name: '品牌粉專', path: 'brandpage', text: '謝謝參加！' }] : null
   }));
   // first 6 visible, 2 hidden until "所有留言", the rest behind "查看更多留言"
@@ -206,7 +207,7 @@ function evilPage() {
 function xArticle(t) {
   return `<article data-testid="tweet" role="article" tabindex="0">
     <div data-testid="Tweet-User-Avatar"><a href="/${t.handle}" role="link"><img alt="" width="40" height="40" src="https://pbs.twimg.com/profile_images/1${t.id}/${t.handle}_normal.jpg"></a></div>
-    <div data-testid="User-Name"><a href="/${t.handle}" role="link"><span>${t.name}</span></a><a href="/${t.handle}" role="link" tabindex="-1"><span>@${t.handle}</span></a><a href="/${t.handle}/status/${t.id}" role="link"><time datetime="2026-11-10T10:00:00.000Z">${t.focal ? '10:00 AM · Nov 10, 2026' : '2h'}</time></a></div>
+    <div data-testid="User-Name"><a href="/${t.handle}" role="link"><span>${t.name}</span></a><a href="/${t.handle}" role="link" tabindex="-1"><span>@${t.handle}</span></a><a href="/${t.handle}/status/${t.id}" role="link"><time datetime="${t.time || '2026-11-10T10:00:00.000Z'}">${t.focal ? '10:00 AM · Nov 10, 2026' : '2h'}</time></a></div>
     <div data-testid="tweetText"><span>${t.text}</span>${(t.tags || []).map(h => ` <a href="/${h}" role="link">@${h}</a>`).join('')}</div>
     <div role="group"${t.stats ? ` aria-label="${t.stats}"` : ''}><div role="button" aria-label="3 replies"><span>3</span></div></div>
   </article>`;
@@ -214,7 +215,7 @@ function xArticle(t) {
 
 function xPostPage() {
   const replies = Array.from({ length: 30 }, (_, i) => ({
-    id: String(1000 + i), handle: 'user_' + i, name: 'User ' + i,
+    id: String(1000 + i), handle: 'user_' + i, name: 'User ' + i, time: new Date(Date.UTC(2026, 10, 10, 11 + i)).toISOString(),
     text: i % 6 === 5 ? 'nice' : '我要抽', tags: i % 6 === 5 ? [] : ['friend_' + i, 'friend_' + (i + 1)]
   }));
   replies.splice(4, 0, { id: '999', handle: 'brand', name: 'Brand', text: '謝謝大家', tags: [] });
@@ -301,7 +302,7 @@ function thPost(p) {
   return `<div data-pressable-container="true" style="min-height:120px;padding:8px;border-bottom:1px solid #ddd">
     <div><a href="/@${p.user}" role="link" tabindex="-1"><img width="36" height="36" alt="${p.user}的大頭貼照" src="https://scontent-tpe1-1.cdninstagram.com/v/t51.2885-19/${p.user}_n.jpg?stp=dst-jpg_s150x150&amp;_nc_ht=x"></a></div>
     <div><span><a href="/@${p.user}" role="link"><span dir="auto"><span>${p.user}</span></span></a></span>
-      <span><a href="/@${p.user}/post/${p.id}" role="link"><time datetime="2026-11-10T08:00:00.000Z" title="2026年11月10日">2小時</time></a></span>
+      <span><a href="/@${p.user}/post/${p.id}" role="link"><time datetime="${p.time || '2026-11-10T08:00:00.000Z'}" title="2026年11月10日">2小時</time></a></span>
       ${p.author ? '<span dir="auto">作者</span>' : ''}</div>
     <div><span dir="auto"><span>${p.text}</span>${(p.tags || []).map(t => ` <a href="/@${t}" role="link"><span dir="auto">@${t}</span></a>`).join('')}</span></div>
     <div><div role="button"><svg aria-label="讚" width="18" height="18"></svg><span dir="auto">${p.likes || 12}</span></div><div role="button"><svg aria-label="回覆" width="18" height="18"></svg><span dir="auto">${p.replies || 3}</span></div></div>
@@ -309,7 +310,7 @@ function thPost(p) {
 }
 
 function thPostPage() {
-  const replies = Array.from({ length: 16 }, (_, i) => ({ id: 'R' + i, user: 'th.user' + i, text: i % 4 === 3 ? '好看' : '我要抽', tags: i % 4 === 3 ? [] : ['pal_' + i, 'pal_' + (i + 2)] }));
+  const replies = Array.from({ length: 16 }, (_, i) => ({ id: 'R' + i, user: 'th.user' + i, time: new Date(Date.UTC(2026, 10, 10, 8, 30 * (i + 1))).toISOString(), text: i % 4 === 3 ? '好看' : '我要抽', tags: i % 4 === 3 ? [] : ['pal_' + i, 'pal_' + (i + 2)] }));
   replies.splice(2, 0, { id: 'R99', user: 'brandtw', text: '感謝參加', author: true });
   return `<!doctype html><html><head>${common}</head><body>
   <div id="feed"></div>
