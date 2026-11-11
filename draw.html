@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700;900&display=swap">
 <style>
-/* Layout: two views under a tab bar that stays at the top. 準備: the numbered setup steps (import, rules, prizes) with the roster beside them, then a 去抽獎 bar. 抽獎: the draw stage (a raffle ticket that gets a seal stamp) and the results. One column on phones, with the roster right under the import step. */
+/* Layout: two views under a tab bar that stays at the top. 準備: steps 1–2 (import, rules) with the roster beside them, then a 去抽獎 bar. 抽獎: step 3 (prizes) and the results on the right, the draw stage (a raffle ticket that gets a seal stamp) on the left. One column on phones: the roster right under the import step, the prizes above the stage. */
 :root {
   --paper: #F2F4F7;
   --surface: #FFFFFF;
@@ -247,22 +247,30 @@ a.btn { text-decoration: none; }
 }
 .view, .setup-grid { display: grid; gap: 20px; align-items: start; }
 .view > *, .setup-grid > * { min-width: 0; }
-.setup-grid { grid-template-areas: "import" "people" "rules" "prizes"; }
+.setup-grid { grid-template-areas: "import" "people" "rules"; }
+.draw-grid { grid-template-areas: "prizes" "stage" "winners"; }
 .area-import { grid-area: import; }
 .area-people { grid-area: people; }
 .area-rules { grid-area: rules; }
 .area-prizes { grid-area: prizes; }
+.area-stage { grid-area: stage; }
+.area-winners { grid-area: winners; }
 @media (min-width: 980px) {
-  /* The roster stays in sight beside steps 1–3, so a changed rule shows who still qualifies.
+  /* The roster stays in sight beside steps 1–2, so a changed rule shows who still qualifies.
      It sticks inside .setup-grid only, so it never slides over the 去抽獎 bar below. */
   .setup-grid {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-rows: auto auto 1fr;
-    grid-template-areas: "import people" "rules people" "prizes people";
+    grid-template-rows: auto 1fr;
+    grid-template-areas: "import people" "rules people";
   }
   .area-people { position: sticky; top: 92px; max-height: calc(100vh - 108px); }
   .area-people .people { flex: 1 1 auto; min-height: 160px; max-height: none; }
-  .draw-grid { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
+  /* The draw stage on the left; prizes (step 3) and the results on the right. */
+  .draw-grid {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    grid-template-areas: "stage prizes" "stage winners";
+  }
 }
 .next-bar {
   display: flex;
@@ -891,8 +899,8 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
 
   <div class="views-bar">
     <nav class="views" id="views" aria-label="抽獎步驟">
-      <a class="view-tab" href="#setup" data-view="setup"><b>準備</b><small><span class="vt-steps">第 1–3 步・</span>名單、條件、獎品</small></a>
-      <a class="view-tab" href="#draw" data-view="draw"><b>抽獎</b><small><span class="vt-steps">第 4 步・</span>抽獎台、得獎名單</small></a>
+      <a class="view-tab" href="#setup" data-view="setup"><b>準備</b><small><span class="vt-steps">第 1–2 步・</span>名單、條件</small></a>
+      <a class="view-tab" href="#draw" data-view="draw"><b>抽獎</b><small><span class="vt-steps">第 3–4 步・</span>獎品、抽獎台、得獎名單</small></a>
     </nav>
   </div>
 
@@ -1001,21 +1009,6 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
           </div>
         </section>
 
-        <section class="panel area-prizes" id="sec-prizes" aria-labelledby="h-prizes">
-          <header class="sec-head">
-            <span class="step" aria-hidden="true">3</span>
-            <div>
-              <h2 id="h-prizes">獎品</h2>
-              <p class="sub">由上到下是預設的抽獎順序，抽獎時也可以隨時切換要抽哪一個。</p>
-            </div>
-          </header>
-          <div class="prize-head" aria-hidden="true"><span>獎項名稱</span><span>名額</span><span></span></div>
-          <ol class="prize-list" id="prize-list"></ol>
-          <div class="row-actions">
-            <button class="btn" type="button" id="btn-add-prize">新增獎品</button>
-            <p class="hint" id="prize-total"></p>
-          </div>
-        </section>
       </div>
 
       <div class="next-bar" id="next-bar">
@@ -1029,7 +1022,23 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     </div>
 
     <div class="view draw-grid" id="view-draw" data-view="draw" hidden>
-      <section class="stage" id="stage" aria-labelledby="h-stage">
+      <section class="panel area-prizes" id="sec-prizes" aria-labelledby="h-prizes">
+        <header class="sec-head">
+          <span class="step" aria-hidden="true">3</span>
+          <div>
+            <h2 id="h-prizes">獎品</h2>
+            <p class="sub">由上到下是預設的抽獎順序，抽獎時也可以隨時切換要抽哪一個，或再加新的獎品。</p>
+          </div>
+        </header>
+        <div class="prize-head" aria-hidden="true"><span>獎項名稱</span><span>名額</span><span></span></div>
+        <ol class="prize-list" id="prize-list"></ol>
+        <div class="row-actions">
+          <button class="btn" type="button" id="btn-add-prize">新增獎品</button>
+          <p class="hint" id="prize-total"></p>
+        </div>
+      </section>
+
+      <section class="stage area-stage" id="stage" aria-labelledby="h-stage">
         <header class="sec-head">
           <span class="step" aria-hidden="true">4</span>
           <div>
@@ -1062,7 +1071,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
         </div>
       </section>
 
-      <section class="panel" id="sec-winners" aria-labelledby="h-winners">
+      <section class="panel area-winners" id="sec-winners" aria-labelledby="h-winners">
         <header class="sec-head">
           <div>
             <h2 id="h-winners">得獎名單</h2>
@@ -1748,17 +1757,18 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     });
     $('#btn-try').hidden = v !== 'setup';
     // Scrolled down when switching: start the other view at its top, right under the tab bar.
-    // 'top' always does that, so a phone shows the 抽出 1 位 button after 試抽看看.
-    if (scroll && shownView && (shownView !== v || scroll === 'top')) {
-      var bar = $('.views-bar').offsetHeight;
-      var top = $('.views-main').getBoundingClientRect().top;
-      if (top < bar || scroll === 'top') window.scrollTo(0, window.scrollY + top - bar - 10);
+    if (scroll && shownView && shownView !== v) {
+      var main = $('.views-main');
+      if (main.getBoundingClientRect().top < $('.views-bar').offsetHeight) scrollUnderBar(main);
     }
     shownView = v;
   }
-  function goView(v, scroll) {
+  function scrollUnderBar(node) {
+    window.scrollTo(0, window.scrollY + node.getBoundingClientRect().top - $('.views-bar').offsetHeight - 10);
+  }
+  function goView(v) {
     if (location.hash !== '#' + v) location.hash = v;
-    showView(scroll || true);
+    showView(true);
   }
 
   // The 去抽獎 bar at the end of 準備: a summary of what has been set up.
@@ -1770,12 +1780,9 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
       text = '已抽出 ' + state.winners.filter(function (w) { return !w.void; }).length + ' / ' + slots + ' 名，名單和條件已鎖定。';
     } else if (!ev.people.length) {
       text = '還沒有參加者，先在第 1 步匯入名單。';
-    } else if (!state.prizes.length) {
-      text = '還沒有獎品，先在第 3 步新增。';
     } else {
-      text = '參加者 ' + ev.people.length + ' 位，符合資格 ' + ev.eligibleCount + ' 位；' + state.prizes.length + ' 個獎項，共 ' + slots + ' 個名額。';
+      text = '參加者 ' + ev.people.length + ' 位，符合資格 ' + ev.eligibleCount + ' 位。下一步到「抽獎」頁設定獎品，然後抽獎。';
       if (ev.eligibleCount === 0) warn = '目前沒有人符合條件，請檢查名單，或放寬第 2 步的條件。';
-      else if (ev.eligibleCount < slots) warn = '符合資格的只有 ' + ev.eligibleCount + ' 位，比 ' + slots + ' 個名額少，有些獎項會抽不滿。';
     }
     $('#next-title').textContent = started ? '抽獎已經開始' : '準備好了嗎？';
     $('#next-text').textContent = text;
@@ -2084,7 +2091,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
       return;
     }
     var msg;
-    if (!state.prizes.length) msg = '先到「準備」頁新增獎品';
+    if (!state.prizes.length) msg = '先在第 3 步新增獎品';
     else if (!ev.people.length) msg = '先到「準備」頁匯入參加者名單';
     else if (ev.eligibleCount === 0) msg = '目前沒有人符合條件';
     else if (allDone) msg = '全部獎項都抽完了';
@@ -2542,9 +2549,11 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
         $('#paste').focus();
       }
     });
+    // 試抽看看: open 抽獎 with the stage right under the tab bar, so phones show 抽出 1 位 too.
     $('#btn-try').addEventListener('click', function (e) {
       e.preventDefault();
-      goView('draw', 'top');
+      goView('draw');
+      scrollUnderBar($('#stage'));
     });
     window.addEventListener('hashchange', function () { showView(true); });
   }

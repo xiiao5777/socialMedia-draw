@@ -185,7 +185,6 @@ const sample = (name) => {
   watch(other, 'other');
   await other.goto(SITE + 'draw.html');
   await other.waitForTimeout(300);
-  await page.click('.view-tab[data-view="setup"]');
   await page.click('#btn-add-prize');
   await page.waitForTimeout(500);
   check(await other.locator('#prize-list .prize-row').count() === 2, 'tabs: a prize added in one tab appears in the other');
@@ -193,6 +192,7 @@ const sample = (name) => {
   await other.waitForTimeout(500);
   check(await page.isChecked('#r-like') && await page.$eval('#s-eligible', n => n.textContent) === await other.$eval('#s-eligible', n => n.textContent), 'tabs: a rule changed in the other tab comes back');
   // The first tab, now up to date, changes something: nothing from the other tab is lost
+  await page.click('.view-tab[data-view="setup"]');
   await page.fill('#r-kw-text', '我要抽');
   await page.waitForTimeout(500);
   await other.reload();

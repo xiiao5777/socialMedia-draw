@@ -32,7 +32,7 @@ const url = SITE + 'draw.html';
     return [s.slice(5), [Math.round(r.left), Math.round(r.top)]];
   })));
   check(pos.people[1] === pos.import[1] && pos.people[0] > pos.import[0] && pos.rules[1] > pos.import[1], 'roster sits beside step 1 on wide screens ' + JSON.stringify(pos));
-  check((await txt('#next-text')) === '參加者 23 位，符合資格 14 位；3 個獎項，共 6 個名額。' && await page.isHidden('#next-warn'), '去抽獎 bar sums up the setup');
+  check((await txt('#next-text')) === '參加者 23 位，符合資格 14 位。下一步到「抽獎」頁設定獎品，然後抽獎。' && await page.isHidden('#next-warn') && await page.isHidden('#sec-prizes'), '去抽獎 bar sums up the setup; the prizes are not on 準備');
 
   // Picking someone out by hand: 排除 puts the name in step 2's exclusion list, 恢復 takes it out again
   const xm = page.locator('#people .person', { hasText: '陳小明' });
@@ -48,6 +48,11 @@ const url = SITE + 'draw.html';
   await page.waitForTimeout(150);
   const under = await page.evaluate(() => ({ bar: Math.round(document.querySelector('.views-bar').getBoundingClientRect().bottom), stage: Math.round(document.getElementById('stage').getBoundingClientRect().top) }));
   check(await view() === 'draw' && page.url().endsWith('#draw') && await page.isHidden('#sec-rules') && under.stage >= under.bar && under.stage < 400, '下一步：去抽獎 opens the 抽獎 view right under the tab bar ' + JSON.stringify(under));
+  const dpos = await page.evaluate(() => Object.fromEntries(['#stage', '#sec-prizes', '#sec-winners'].map(s => {
+    const r = document.querySelector(s).getBoundingClientRect();
+    return [s.replace(/^#(sec-)?/, ''), [Math.round(r.left), Math.round(r.top)]];
+  })));
+  check(dpos.prizes[0] > dpos.stage[0] && dpos.prizes[1] === dpos.stage[1] && dpos.winners[0] === dpos.prizes[0] && dpos.winners[1] > dpos.prizes[1], 'the 抽獎 view has the stage on the left, step 3 prizes and the results on the right ' + JSON.stringify(dpos));
   const sum = await page.$$eval('#rule-sum .rs-chip', ns => ns.map(n => n.textContent));
   check(sum.join() === '需留言,需按讚,需標記 2 位,留言含「我要抽」,排除 1 人,同一人只算一次' && (await txt('#rule-sum .rs-edit')) === '修改條件', 'the 抽獎 view lists the rules in use ' + JSON.stringify(sum));
   check(await page.isVisible('#btn-csv') && await page.isHidden('#btn-try'), 'CSV button shown, 試抽看看 hidden on the 抽獎 view');
@@ -197,11 +202,12 @@ const url = SITE + 'draw.html';
   await page.click('.view-tab[data-view="draw"]');
   await page.waitForTimeout(150);
   check(await page.isVisible('#pool-warn'), 'the draw stage warns too');
-  await page.click('.view-tab[data-view="setup"]');
 
-  // Prize editor
+  // Prize editor, on the 抽獎 view
   await page.click('#btn-add-prize');
   check(await page.locator('#prize-list .prize-row').count() === 2, 'prize added');
+  await page.click('.view-tab[data-view="setup"]');
+  await page.waitForTimeout(150);
 
   // 全部移除: one button (pressed twice) clears every imported list; the rules and prizes stay
   check((await txt('#batches .batches-title')) === '已匯入的名單（5 份）', 'the import step counts the lists');
@@ -220,13 +226,15 @@ const url = SITE + 'draw.html';
   p2.on('pageerror', e => errors.push('m pageerror: ' + e.message));
   await p2.goto(url);
   await p2.waitForTimeout(300);
-  const order = await p2.evaluate(() => ['#sec-import', '#sec-people', '#sec-rules', '#sec-prizes', '#next-bar'].map(s => Math.round(document.querySelector(s).getBoundingClientRect().top)));
-  check(order.every((y, i) => i === 0 || y > order[i - 1]), 'phones: import, roster, rules, prizes, 去抽獎 from top to bottom ' + JSON.stringify(order));
+  const order = await p2.evaluate(() => ['#sec-import', '#sec-people', '#sec-rules', '#next-bar'].map(s => Math.round(document.querySelector(s).getBoundingClientRect().top)));
+  check(order.every((y, i) => i === 0 || y > order[i - 1]), 'phones: import, roster, rules, 去抽獎 from top to bottom ' + JSON.stringify(order));
   await p2.screenshot({ path: path.join(OUT, 'shot-draw-mobile-dark-setup.png'), fullPage: true });
   await p2.click('#btn-try');
   await p2.waitForTimeout(200);
   const btn = await p2.$eval('#btn-draw', n => { const r = n.getBoundingClientRect(); return [Math.round(r.top), Math.round(r.bottom)]; });
   check(p2.url().endsWith('#draw') && btn[0] > 0 && btn[1] <= 844, 'phones: 試抽看看 opens 抽獎 with the 抽出 1 位 button on screen ' + JSON.stringify(btn));
+  const order2 = await p2.evaluate(() => ['#sec-prizes', '#stage', '#sec-winners'].map(s => Math.round(document.querySelector(s).getBoundingClientRect().top)));
+  check(order2[0] < order2[1] && order2[1] < order2[2], 'phones: prizes, stage, results from top to bottom on 抽獎 ' + JSON.stringify(order2));
   await p2.click('#btn-draw');
   await p2.waitForTimeout(800);
   check(await p2.$eval('#ticket', n => n.dataset.mode) === 'rolling', 'animated draw rolls names');
