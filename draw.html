@@ -1,0 +1,2288 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>開始抽獎｜抽獎系統</title>
+<meta name="description" content="匯入 Facebook、X、Threads 貼文的留言、按讚和分享名單，設定參加條件和獎品，公平地隨機抽出得獎者。資料只存在你的瀏覽器。">
+<meta name="theme-color" content="#F2F4F7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#11151C" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700;900&display=swap">
+<style>
+/* Layout: two-column workbench. Left: the numbered setup steps (import, rules, prizes) and the roster. Right: the draw stage (a raffle ticket that gets a seal stamp) and the results. One column on phones. */
+:root {
+  --paper: #F2F4F7;
+  --surface: #FFFFFF;
+  --surface-2: #EBEEF3;
+  --ink: #1A2030;
+  --muted: #586174;
+  --line: #D8DDE6;
+  --accent: #C62B2B;
+  --accent-text: #AE2323;
+  --accent-soft: #FBE8E6;
+  --on-accent: #FFFFFF;
+  --gold: #85600F;
+  --gold-soft: #F6EDD8;
+  --ok: #1B6E45;
+  --ok-soft: #E1F2E8;
+  --warn: #965200;
+  --warn-soft: #FBEFDB;
+  --focus: #2A66E0;
+  --shadow-sm: 0 1px 2px rgba(18, 26, 43, .12);
+  --shadow: 0 1px 2px rgba(18, 26, 43, .06), 0 10px 28px rgba(18, 26, 43, .08);
+  --font-display: "Noto Serif TC", "Songti TC", "PMingLiU", serif;
+  --font-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --radius: 10px;
+  --av-bg-l: 87%;
+  --av-fg-l: 27%;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #11151C;
+    --surface: #191E28;
+    --surface-2: #222835;
+    --ink: #E6E9EF;
+    --muted: #9AA3B4;
+    --line: #2E3545;
+    --accent: #CC3B37;
+    --accent-text: #F27C72;
+    --accent-soft: #3A1F21;
+    --on-accent: #FFFFFF;
+    --gold: #E2B65A;
+    --gold-soft: #33291A;
+    --ok: #5BC892;
+    --ok-soft: #173126;
+    --warn: #E8A84A;
+    --warn-soft: #362816;
+    --focus: #7AA5FF;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 28px rgba(0, 0, 0, .3);
+    --av-bg-l: 28%;
+    --av-fg-l: 86%;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #11151C;
+  --surface: #191E28;
+  --surface-2: #222835;
+  --ink: #E6E9EF;
+  --muted: #9AA3B4;
+  --line: #2E3545;
+  --accent: #CC3B37;
+  --accent-text: #F27C72;
+  --accent-soft: #3A1F21;
+  --on-accent: #FFFFFF;
+  --gold: #E2B65A;
+  --gold-soft: #33291A;
+  --ok: #5BC892;
+  --ok-soft: #173126;
+  --warn: #E8A84A;
+  --warn-soft: #362816;
+  --focus: #7AA5FF;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 28px rgba(0, 0, 0, .3);
+  --av-bg-l: 28%;
+  --av-fg-l: 86%;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3 { margin: 0; text-wrap: balance; }
+p { margin: 0; }
+button { font: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.page {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding-block: 24px 80px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Masthead */
+.masthead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px 40px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.brand h1 {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(30px, 4vw, 40px);
+  line-height: 1.1;
+  letter-spacing: .06em;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.mark {
+  display: inline-grid;
+  place-items: center;
+  width: 1.2em;
+  height: 1.2em;
+  font-size: .78em;
+  letter-spacing: 0;
+  background: var(--accent);
+  color: var(--on-accent);
+  border-radius: 6px;
+  transform: rotate(-6deg);
+}
+.tagline { color: var(--muted); max-width: 46ch; }
+.sitenav { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 14px; }
+.sitenav a { color: var(--muted); text-decoration: none; }
+.sitenav a:hover { color: var(--accent-text); text-decoration: underline; text-underline-offset: 3px; }
+.sitefoot { display: flex; flex-wrap: wrap; gap: 4px 8px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+.sitefoot a { color: var(--muted); }
+.stats { display: grid; grid-template-columns: repeat(4, auto); gap: 4px 28px; margin: 0; }
+.stats div { display: flex; flex-direction: column; }
+.stats dt { font-size: 12px; color: var(--muted); letter-spacing: .08em; }
+.stats dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.stats dd small { font-family: var(--font-body); font-size: 13px; font-weight: 400; color: var(--muted); margin-left: 2px; }
+@media (max-width: 600px) {
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; gap: 10px 16px; }
+}
+
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: var(--gold-soft);
+  border: 1px solid var(--line);
+}
+.banner p { max-width: 72ch; }
+.banner b { color: var(--gold); }
+.banner-update { background: var(--accent-soft); }
+.banner-update b { color: var(--accent-text); }
+.banner-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+a.btn { text-decoration: none; }
+
+/* Workbench */
+.workbench { display: grid; gap: 20px; align-items: start; }
+@media (min-width: 980px) {
+  .workbench { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+.col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.sec-head { display: flex; gap: 12px; align-items: flex-start; }
+.step {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 14px;
+  background: var(--ink);
+  color: var(--surface);
+  margin-top: 1px;
+}
+.sec-head h2 { font-size: 18px; font-weight: 700; line-height: 1.45; }
+.sub { color: var(--muted); font-size: 13.5px; margin-top: 2px; }
+.hint { color: var(--muted); font-size: 13px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field-label { font-weight: 500; font-size: 14px; }
+.lock-note {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-size: 13.5px;
+}
+
+input[type="text"], input[type="number"], input[type="search"], textarea, select {
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  min-width: 0;
+}
+textarea { width: 100%; resize: vertical; line-height: 1.55; }
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: .8; }
+input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn:hover:not(:disabled) { border-color: var(--muted); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn-primary:hover:not(:disabled) { border-color: var(--accent); filter: brightness(1.07); }
+.btn-lg { min-height: 50px; padding: 10px 22px; font-size: 16px; font-weight: 700; }
+.btn-ghost { background: transparent; }
+.btn.danger { color: var(--accent-text); }
+.btn[data-armed="1"] { background: var(--accent-soft); border-color: var(--accent-text); color: var(--accent-text); }
+.row-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+
+/* Segmented control */
+.seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface-2);
+  border-radius: 9px;
+  align-self: flex-start;
+  max-width: 100%;
+}
+.seg button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  padding: 6px 16px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.seg button[aria-checked="true"] { background: var(--surface); color: var(--ink); font-weight: 700; box-shadow: var(--shadow-sm); }
+
+.callout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px dashed var(--line);
+  font-size: 13.5px;
+}
+.callout p { max-width: 52ch; }
+.callout a { color: var(--accent-text); font-weight: 500; }
+.preview {
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.preview-head { font-weight: 500; }
+.preview-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.preview-row .av { width: 22px; height: 22px; font-size: 11px; }
+.preview-row b { flex: none; font-weight: 500; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preview-row span { color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preview-more { color: var(--muted); }
+.preview-warn { color: var(--warn); font-weight: 500; }
+
+.batches { display: flex; flex-direction: column; gap: 6px; }
+.batches-title { font-size: 13px; color: var(--muted); letter-spacing: .06em; }
+.batch {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 6px 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 14px;
+}
+.batch .what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.batch .what small { color: var(--muted); font-size: 12.5px; margin-left: 6px; }
+.batch .btn { min-height: 30px; padding: 4px 10px; font-size: 13px; }
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  line-height: 1.6;
+}
+.pill-comment { background: var(--surface-2); color: var(--ink); }
+.pill-like { background: var(--accent-soft); color: var(--accent-text); }
+.pill-share { background: var(--gold-soft); color: var(--gold); }
+.pill-ok { background: var(--ok-soft); color: var(--ok); }
+.pill-warn { background: var(--warn-soft); color: var(--warn); }
+.pill-won { background: var(--accent); color: var(--on-accent); }
+.pill-void { background: var(--surface-2); color: var(--muted); }
+
+/* Rules */
+.rules {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.rule { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.rule + .rule { border-top: 1px solid var(--line); }
+.rule > label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.rule input[type="checkbox"] { width: 18px; height: 18px; margin: 3px 0 0; accent-color: var(--accent); flex: none; }
+.rule b { display: block; font-weight: 500; }
+.rule small { display: block; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.rule-fixed { flex-direction: row; gap: 10px; align-items: flex-start; }
+.check-fixed {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 3px;
+  border-radius: 4px;
+  background: var(--ok);
+  color: var(--surface);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+.rule-extra { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-left: 28px; font-size: 14px; }
+.rule-extra input[type="number"] { width: 76px; }
+.rule-extra input[type="text"] { flex: 1 1 150px; }
+.rule:has(> label input:not(:checked)) .rule-extra { opacity: .55; }
+
+/* Prizes */
+.prize-head, .prize-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 84px 38px;
+  gap: 8px;
+  align-items: center;
+}
+.prize-head { font-size: 12px; color: var(--muted); letter-spacing: .06em; }
+.prize-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.prize-row input { width: 100%; }
+.icon-btn {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.icon-btn:hover:not(:disabled) { color: var(--accent-text); border-color: var(--accent-text); }
+
+/* Roster */
+.people-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button {
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+  cursor: pointer;
+}
+.chips button[aria-checked="true"] { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+.chips .n { font-family: var(--font-mono); font-size: 12px; margin-left: 3px; font-variant-numeric: tabular-nums; }
+#people-q { flex: 1 1 150px; max-width: 240px; }
+.people {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 460px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.person {
+  display: grid;
+  grid-template-columns: 52px 28px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 12px;
+}
+.person + .person { border-top: 1px solid var(--line); }
+.no { font-family: var(--font-mono); font-size: 13px; color: var(--accent-text); font-variant-numeric: tabular-nums; }
+.no.none { color: var(--muted); }
+.who { min-width: 0; }
+.who .name { font-weight: 500; overflow-wrap: anywhere; }
+.who .handle { font-weight: 400; color: var(--muted); font-size: 12.5px; margin-left: 6px; }
+.who .meta { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 12px; color: var(--muted); }
+.who .reasons { font-size: 12px; color: var(--warn); }
+.person-empty { padding: 14px 12px; color: var(--muted); font-size: 14px; }
+.who .name a { color: inherit; text-decoration: none; }
+.who .name a:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/* Avatars: the collector's thumbnail, or the first letter on a colour from the name */
+.av {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  user-select: none;
+}
+.av img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.av-letter { background: hsl(var(--h, 210) 46% var(--av-bg-l)); color: hsl(var(--h, 210) 52% var(--av-fg-l)); }
+
+/* Stage */
+.stage { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.stage:fullscreen {
+  background: var(--paper);
+  padding: 4vh 6vw;
+  justify-content: center;
+  overflow: auto;
+}
+.stage:fullscreen .ticket-name { font-size: clamp(48px, 8vw, 120px); }
+.stage:fullscreen .ticket-body { min-height: 40vh; }
+.ticket {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.ticket-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 12px 20px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+#t-prize { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ticket-no { flex: none; font-family: var(--font-mono); font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+.ticket-body {
+  position: relative;
+  min-height: 196px;
+  padding: 26px 22px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+}
+.ticket[data-mode="won"] .ticket-body { padding-right: 132px; }
+.ticket-who { display: flex; align-items: center; gap: 18px; min-width: 0; }
+.ticket-who .ticket-name { min-width: 0; }
+.ticket-av {
+  width: 72px;
+  height: 72px;
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 900;
+  box-shadow: 0 0 0 3px var(--surface), 0 0 0 4px var(--line);
+}
+.stage:fullscreen .ticket-av { width: clamp(88px, 11vw, 168px); height: clamp(88px, 11vw, 168px); font-size: clamp(36px, 5vw, 72px); }
+.ticket-name {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(30px, 4.6vw, 54px);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.ticket[data-mode="idle"] .ticket-name {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 20px;
+  color: var(--muted);
+}
+.ticket-quote {
+  color: var(--muted);
+  font-size: 15px;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ticket-foot {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding: 12px 22px 14px;
+  border-top: 2px dashed var(--line);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.ticket-foot::before, .ticket-foot::after {
+  content: "";
+  position: absolute;
+  top: -12px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--paper);
+  border: 1px solid var(--line);
+}
+.ticket-foot::before { left: -12px; }
+.ticket-foot::after { right: -12px; }
+.seal {
+  position: absolute;
+  right: 24px;
+  top: 50%;
+  width: 88px;
+  height: 88px;
+  margin-top: -44px;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-areas: "a b" "c d";
+  place-items: center;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 27px;
+  line-height: 1;
+  color: var(--accent-text);
+  border: 3px solid currentColor;
+  border-radius: 7px;
+  box-shadow: inset 0 0 0 2px var(--surface), inset 0 0 0 4px currentColor;
+  transform: rotate(-8deg);
+  opacity: .92;
+}
+.seal span:nth-child(1) { grid-area: a; }
+.seal span:nth-child(2) { grid-area: b; }
+.seal span:nth-child(3) { grid-area: c; }
+.seal span:nth-child(4) { grid-area: d; }
+.seal.stamp { animation: stamp .34s cubic-bezier(.2, 1.4, .4, 1) both; }
+@keyframes stamp {
+  from { transform: scale(1.9) rotate(-24deg); opacity: 0; }
+  to { transform: rotate(-8deg); opacity: .92; }
+}
+@media (max-width: 520px) {
+  .ticket[data-mode="won"] .ticket-body { padding-right: 22px; padding-bottom: 92px; }
+  .seal { width: 66px; height: 66px; font-size: 20px; padding: 6px; top: auto; bottom: 16px; right: 18px; margin-top: 0; }
+  .ticket-who { gap: 14px; }
+  .ticket-av { width: 54px; height: 54px; font-size: 24px; }
+}
+
+.prize-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.prize-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14px;
+  cursor: pointer;
+  max-width: 100%;
+}
+.prize-chip .pname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prize-chip .left { font-family: var(--font-mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+.prize-chip[aria-checked="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); font-weight: 700; }
+.warn-line { padding: 8px 12px; border-radius: 8px; background: var(--warn-soft); color: var(--warn); font-size: 13.5px; }
+.draw-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.draw-actions .btn-primary { flex: 1 1 200px; }
+.draw-options { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+
+.switch { position: relative; display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; }
+.switch input { position: absolute; left: 0; top: 50%; width: 40px; height: 22px; margin: -11px 0 0; opacity: 0; cursor: pointer; }
+.switch-track { position: relative; width: 40px; height: 22px; border-radius: 999px; background: var(--line); transition: background .15s; flex: none; }
+.switch-track::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--on-accent);
+  box-shadow: var(--shadow-sm);
+  transition: transform .15s;
+}
+.switch input:checked + .switch-track { background: var(--accent); }
+.switch input:checked + .switch-track::after { transform: translateX(18px); }
+.switch input:focus-visible + .switch-track { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* Results */
+#winners { display: flex; flex-direction: column; gap: 16px; }
+.wgroup { display: flex; flex-direction: column; gap: 6px; }
+.wgroup-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-weight: 700; }
+.wgroup-head .count { font-family: var(--font-mono); font-size: 13px; font-weight: 500; color: var(--muted); }
+.wlist { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 8px; }
+.wrow { display: grid; grid-template-columns: 52px 36px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 8px 8px 12px; }
+.wrow .av { width: 36px; height: 36px; font-size: 15px; }
+.wrow.void .av { opacity: .45; filter: grayscale(1); }
+.wlinks { display: flex; flex-wrap: wrap; gap: 0 14px; font-size: 12.5px; }
+.wlinks a { color: var(--accent-text); font-weight: 500; text-decoration: none; }
+.wlinks a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.wrow + .wrow { border-top: 1px solid var(--line); }
+.wrow .name { font-weight: 700; overflow-wrap: anywhere; }
+.wrow .sub2 { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wrow.void .name { text-decoration: line-through; color: var(--muted); font-weight: 500; }
+.wrow.void .no { color: var(--muted); }
+.wrow .btn { min-height: 30px; padding: 4px 10px; font-size: 13px; }
+.wempty { color: var(--muted); font-size: 13.5px; padding: 8px 12px; border: 1px dashed var(--line); border-radius: 8px; }
+.copy-box { font-family: var(--font-mono); font-size: 13px; }
+.log summary { cursor: pointer; font-weight: 500; font-size: 14px; padding: 4px 0; }
+.log summary .n { font-family: var(--font-mono); color: var(--muted); font-weight: 400; margin-left: 4px; }
+.log ol { list-style: none; margin: 8px 0 0; padding: 0; max-height: 260px; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
+.log li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; font-size: 13px; }
+.log time { font-family: var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.log li span { overflow-wrap: anywhere; }
+.log .log-void span, .log .log-reset span { color: var(--warn); }
+.log .hint { margin-top: 6px; }
+.danger-row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; border-top: 1px solid var(--line); padding-top: 14px; }
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 20;
+  max-width: calc(100% - 32px);
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--surface);
+  font-size: 14px;
+  box-shadow: var(--shadow);
+}
+.sr-only {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="masthead">
+    <div class="brand">
+      <h1><span class="mark" aria-hidden="true">抽</span>抽獎系統</h1>
+      <p class="tagline">放進 FB、X、Threads 貼文的留言、按讚和分享名單，設定條件和獎品，公平地隨機抽出得獎者。</p>
+      <nav class="sitenav" aria-label="網站">
+        <a href="./">← 回首頁</a>
+        <a href="./#use">使用教學</a>
+        <a href="./#install">安裝抓取工具</a>
+      </nav>
+    </div>
+    <dl class="stats">
+      <div><dt>留言</dt><dd><span id="s-comments">0</span><small>則</small></dd></div>
+      <div><dt>參加者</dt><dd><span id="s-people">0</span><small>位</small></dd></div>
+      <div><dt>符合資格</dt><dd><span id="s-eligible">0</span><small>位</small></dd></div>
+      <div><dt>已抽出</dt><dd><span id="s-drawn">0 / 0</span><small>名</small></dd></div>
+    </dl>
+  </header>
+
+  <div class="banner" id="sample-banner" hidden>
+    <p><b>這是範例資料。</b>一篇有 23 位網友互動的貼文，條件和獎品都設定好了，可以直接在抽獎台按「抽出 1 位」試試看。</p>
+    <button class="btn" type="button" id="btn-clear-sample">清除範例，開始使用</button>
+  </div>
+
+  <div class="banner banner-update" id="tool-banner" role="status" hidden>
+    <p><b id="tool-banner-title"></b><span id="tool-banner-text"></span></p>
+    <div class="banner-actions">
+      <a class="btn btn-primary" id="tool-banner-link" href="./#install" target="_blank" rel="noopener">看安裝方法</a>
+      <button class="btn" type="button" id="btn-tool-ok">知道了</button>
+    </div>
+  </div>
+
+  <main class="workbench">
+    <div class="col">
+      <section class="panel" id="sec-import" data-lockable aria-labelledby="h-import">
+        <header class="sec-head">
+          <span class="step" aria-hidden="true">1</span>
+          <div>
+            <h2 id="h-import">匯入參加者</h2>
+            <p class="sub">分別貼上留言、按讚、分享的名單，同一個名字會自動合併成一位參加者。</p>
+          </div>
+        </header>
+        <p class="lock-note" hidden>抽獎已經開始，名單已鎖定。要修改請先在得獎名單按「重新開始抽獎」。</p>
+        <div class="seg" role="radiogroup" aria-label="名單類型" id="import-type">
+          <button type="button" role="radio" data-type="comment" aria-checked="true">留言者</button>
+          <button type="button" role="radio" data-type="like" aria-checked="false">按讚者</button>
+          <button type="button" role="radio" data-type="share" aria-checked="false">分享者</button>
+        </div>
+        <div class="callout">
+          <p>用「名單抓取工具」在貼文頁面按一下，就能把留言、按讚、分享名單複製下來，再貼到下面。</p>
+          <a href="./#install" target="_blank" rel="noopener">安裝抓取工具</a>
+        </div>
+        <div class="field">
+          <label class="field-label" for="paste" id="paste-label">貼上留言者名單</label>
+          <textarea id="paste" rows="6" spellcheck="false"></textarea>
+          <p class="hint" id="paste-hint"></p>
+        </div>
+        <div class="preview" id="preview" hidden></div>
+        <div class="row-actions">
+          <button class="btn btn-primary" type="button" id="btn-add">加入名單</button>
+          <button class="btn" type="button" id="btn-file">匯入 CSV 檔</button>
+          <input type="file" id="file" accept=".csv,.tsv,.txt,.json,text/csv,text/plain,application/json" hidden>
+        </div>
+        <p class="hint">CSV 請存成 UTF-8，第一列可以用這些欄位：名字、帳號、留言、類型（留言／按讚／分享）。</p>
+        <div class="batches" id="batches"></div>
+      </section>
+
+      <section class="panel" id="sec-rules" data-lockable aria-labelledby="h-rules">
+        <header class="sec-head">
+          <span class="step" aria-hidden="true">2</span>
+          <div>
+            <h2 id="h-rules">參加條件</h2>
+            <p class="sub">勾選的條件全部符合，才會拿到抽獎編號、進入抽獎池。</p>
+          </div>
+        </header>
+        <p class="lock-note" hidden>抽獎已經開始，條件已鎖定，確保每位得獎者都是用同一套規則抽出來的。</p>
+        <ul class="rules">
+          <li class="rule rule-fixed">
+            <span class="check-fixed" aria-hidden="true">✓</span>
+            <div><b>同一人多次留言只算一次</b><small>固定規則，每位參加者只有一個抽獎編號。</small></div>
+          </li>
+          <li class="rule">
+            <label><input type="checkbox" id="r-comment"><span><b>需要留言</b><small>至少留言一次</small></span></label>
+          </li>
+          <li class="rule">
+            <label><input type="checkbox" id="r-like"><span><b>需要按讚</b><small>出現在按讚者名單裡</small></span></label>
+          </li>
+          <li class="rule">
+            <label><input type="checkbox" id="r-share"><span><b>需要分享</b><small>出現在分享者名單裡</small></span></label>
+          </li>
+          <li class="rule">
+            <label><input type="checkbox" id="r-tag"><span><b>需要標記朋友</b><small>用留言裡的「@名字」計算，標記不同的人才算</small></span></label>
+            <div class="rule-extra">
+              <label for="r-tag-n">至少標記</label>
+              <input type="number" id="r-tag-n" min="1" max="20" inputmode="numeric">
+              <span>位</span>
+            </div>
+          </li>
+          <li class="rule">
+            <label><input type="checkbox" id="r-kw"><span><b>留言要有關鍵字</b><small>多個關鍵字用逗號隔開，不分大小寫</small></span></label>
+            <div class="rule-extra">
+              <label class="sr-only" for="r-kw-text">關鍵字</label>
+              <input type="text" id="r-kw-text" placeholder="例如：我要抽">
+              <label class="sr-only" for="r-kw-mode">比對方式</label>
+              <select id="r-kw-mode">
+                <option value="any">符合任一個</option>
+                <option value="all">全部都要有</option>
+              </select>
+            </div>
+          </li>
+        </ul>
+        <div class="field">
+          <label class="field-label" for="r-exclude">排除名單</label>
+          <textarea id="r-exclude" rows="2" placeholder="不參加抽獎的人，例如粉專小編、工作人員。每行一個名字。"></textarea>
+        </div>
+      </section>
+
+      <section class="panel" id="sec-prizes" aria-labelledby="h-prizes">
+        <header class="sec-head">
+          <span class="step" aria-hidden="true">3</span>
+          <div>
+            <h2 id="h-prizes">獎品</h2>
+            <p class="sub">由上到下是預設的抽獎順序，抽獎時也可以隨時切換要抽哪一個。</p>
+          </div>
+        </header>
+        <div class="prize-head" aria-hidden="true"><span>獎項名稱</span><span>名額</span><span></span></div>
+        <ol class="prize-list" id="prize-list"></ol>
+        <div class="row-actions">
+          <button class="btn" type="button" id="btn-add-prize">新增獎品</button>
+          <p class="hint" id="prize-total"></p>
+        </div>
+      </section>
+
+      <section class="panel" id="sec-people" aria-labelledby="h-people">
+        <header class="sec-head">
+          <div>
+            <h2 id="h-people">參加者名單</h2>
+            <p class="sub">抽獎編號只發給符合資格的人，看不符合的原因可以幫你檢查條件。</p>
+          </div>
+        </header>
+        <div class="people-tools">
+          <div class="chips" role="radiogroup" aria-label="篩選參加者" id="people-filter">
+            <button type="button" role="radio" data-f="all" aria-checked="true">全部<span class="n" id="f-all">0</span></button>
+            <button type="button" role="radio" data-f="ok" aria-checked="false">符合<span class="n" id="f-ok">0</span></button>
+            <button type="button" role="radio" data-f="no" aria-checked="false">不符合<span class="n" id="f-no">0</span></button>
+          </div>
+          <input type="search" id="people-q" placeholder="搜尋名字" aria-label="搜尋名字">
+        </div>
+        <ul class="people" id="people"></ul>
+        <p class="hint" id="people-more" hidden></p>
+      </section>
+    </div>
+
+    <div class="col">
+      <section class="stage" id="stage" aria-labelledby="h-stage">
+        <header class="sec-head">
+          <span class="step" aria-hidden="true">4</span>
+          <div>
+            <h2 id="h-stage">抽獎台</h2>
+            <p class="sub" id="pool-line"></p>
+          </div>
+        </header>
+        <div class="ticket" id="ticket" data-mode="idle">
+          <div class="ticket-top"><span id="t-prize"></span><span class="ticket-no" id="t-no"></span></div>
+          <div class="ticket-body">
+            <div class="ticket-who">
+              <span class="av ticket-av" id="t-av" aria-hidden="true" hidden></span>
+              <p class="ticket-name" id="t-name"></p>
+            </div>
+            <p class="ticket-quote" id="t-quote" hidden></p>
+            <div class="seal" id="t-seal" hidden aria-hidden="true"><span>恭</span><span>喜</span><span>中</span><span>獎</span></div>
+          </div>
+          <div class="ticket-foot" id="t-foot"></div>
+        </div>
+        <div class="prize-chips" id="prize-chips" role="radiogroup" aria-label="要抽的獎項"></div>
+        <p class="warn-line" id="pool-warn" hidden></p>
+        <div class="draw-actions">
+          <button class="btn btn-primary btn-lg" type="button" id="btn-draw">抽出 1 位</button>
+          <button class="btn btn-lg" type="button" id="btn-draw-rest" hidden></button>
+        </div>
+        <div class="draw-options">
+          <label class="switch" for="opt-anim"><input type="checkbox" id="opt-anim" role="switch"><span class="switch-track" aria-hidden="true"></span><span>抽獎動畫</span></label>
+          <button class="btn btn-ghost" type="button" id="btn-fs" hidden>全螢幕</button>
+        </div>
+      </section>
+
+      <section class="panel" id="sec-winners" aria-labelledby="h-winners">
+        <header class="sec-head">
+          <div>
+            <h2 id="h-winners">得獎名單</h2>
+            <p class="sub">作廢的得獎者不會放回抽獎池，名額會釋出，可以再抽一次。</p>
+          </div>
+        </header>
+        <div id="winners"></div>
+        <div class="row-actions">
+          <button class="btn btn-primary" type="button" id="btn-copy">複製得獎公告</button>
+          <button class="btn" type="button" id="btn-csv">下載 CSV 紀錄</button>
+        </div>
+        <textarea id="copy-box" class="copy-box" rows="8" readonly hidden aria-label="得獎公告文字"></textarea>
+        <details class="log" id="log">
+          <summary>抽獎紀錄<span class="n" id="log-count">0</span></summary>
+          <p class="hint" id="log-empty">抽出第一位得獎者時，會記下當時的條件和抽獎池人數，方便公開說明。</p>
+          <ol id="log-list"></ol>
+        </details>
+        <div class="danger-row">
+          <button class="btn btn-ghost" type="button" id="btn-reset">重新開始抽獎</button>
+          <button class="btn btn-ghost danger" type="button" id="btn-wipe">清除全部資料</button>
+        </div>
+      </section>
+    </div>
+  </main>
+  <footer class="sitefoot">
+    <span>抽獎系統・抓取工具 <span id="foot-ver"></span></span><span aria-hidden="true">・</span>
+    <a href="./">首頁</a><span aria-hidden="true">・</span>
+    <a href="./#faq">常見問題</a><span aria-hidden="true">・</span>
+    <a href="https://github.com/xiiao5777/socialMedia-draw/issues" target="_blank" rel="noopener">回報問題</a>
+  </footer>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<p class="sr-only" id="announcer" aria-live="polite"></p>
+
+<script>
+(function () {
+  'use strict';
+
+  var STORE_KEY = 'giveaway-draw:v1';
+  // A few numbers for the homepage's 「繼續抽獎」 line.
+  var SUMMARY_KEY = 'giveaway-draw:summary';
+  // Newest 名單抓取工具 version; build.js refuses to build when it differs from src/collector.js.
+  // A pasted result from an older tool shows a banner asking to reinstall the bookmark.
+  var COLLECTOR_VERSION = '1.2';
+  var TYPE_LABEL = { comment: '留言', like: '按讚', share: '分享' };
+  var PLATFORM_LABEL = { facebook: 'Facebook', x: 'X', threads: 'Threads' };
+  var PLACEHOLDER = {
+    comment: '陳小明 | 我要抽！@Amy Lim @林雅婷\nAmy Lim | 我要抽\n黃志豪 | 好想要 @Kelly Wong',
+    like: '陳小明\nAmy Lim\n林雅婷',
+    share: '陳小明\nKelly Wong'
+  };
+  var HINT = {
+    comment: '每行一則留言，名字和留言之間用「|」或 Tab 隔開，從試算表複製兩欄也可以。用抓取工具複製的結果也直接貼在這裡。',
+    like: '每行一個名字，用來判斷「需要按讚」條件。用抓取工具複製的結果也直接貼在這裡。',
+    share: '每行一個名字，用來判斷「需要分享」條件。用抓取工具複製的結果也直接貼在這裡。'
+  };
+
+  var state;
+  var lastEv = null;
+  var busy = false;
+  var rolling = false;
+
+  function $(s, r) { return (r || document).querySelector(s); }
+  function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+
+  function el(tag, props) {
+    var n = document.createElement(tag);
+    if (props) {
+      Object.keys(props).forEach(function (k) {
+        var v = props[k];
+        if (v == null || v === false) return;
+        if (k === 'class') n.className = v;
+        else if (v === true) n.setAttribute(k, '');
+        else n.setAttribute(k, v);
+      });
+    }
+    var kids = Array.prototype.slice.call(arguments, 2);
+    (function add(list) {
+      list.forEach(function (c) {
+        if (c == null || c === false) return;
+        if (Array.isArray(c)) add(c);
+        else n.append(c.nodeType ? c : String(c));
+      });
+    })(kids);
+    return n;
+  }
+
+  function uid() {
+    try {
+      var a = new Uint32Array(2);
+      crypto.getRandomValues(a);
+      return a[0].toString(36) + a[1].toString(36);
+    } catch (e) {
+      return Math.random().toString(36).slice(2) + Date.now().toString(36);
+    }
+  }
+
+  // Unbiased random integer in [0, n) from the browser's cryptographic generator.
+  function randInt(n) {
+    if (n <= 1) return 0;
+    var limit = Math.floor(0x100000000 / n) * n;
+    var buf = new Uint32Array(1);
+    for (;;) {
+      crypto.getRandomValues(buf);
+      if (buf[0] < limit) return buf[0] % n;
+    }
+  }
+
+  function clampInt(v, min, max, dflt) {
+    var n = parseInt(v, 10);
+    if (!isFinite(n)) return dflt;
+    return Math.min(max, Math.max(min, n));
+  }
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function fmtTime(ts) { var d = new Date(ts); return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()); }
+  function fmtDate(ts, sec) {
+    var d = new Date(ts);
+    return d.getFullYear() + '/' + pad(d.getMonth() + 1) + '/' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + (sec ? ':' + pad(d.getSeconds()) : '');
+  }
+  function fmtShort(ts) { var d = new Date(ts); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+  function dateStamp() { var d = new Date(); return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes()); }
+  function fmtTicket(n, total) { return '#' + String(n).padStart(Math.max(3, String(total).length), '0'); }
+  function prefersReduced() { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
+  function animOn() { return !!state.ui.anim && !prefersReduced(); }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  // ---------- Text helpers ----------
+  function normKey(s) {
+    return String(s || '').normalize('NFKC').replace(/^@+/, '').replace(/\s+/g, ' ').trim().toLowerCase();
+  }
+  function cleanName(s) {
+    return String(s || '').replace(/^\s*(?:\d{1,4}[.)、]\s+|[-*•·]\s+)/, '').replace(/\s+/g, ' ').trim();
+  }
+  function splitList(raw) {
+    return String(raw || '').split(/[\n,，、;；]/).map(function (x) { return x.trim(); }).filter(Boolean);
+  }
+  function mentionsOf(text) {
+    var set = new Set();
+    var re = /(^|[^\p{L}\p{N}_])@([\p{L}\p{N}_.]+)/gu;
+    var s = String(text || '').normalize('NFKC');
+    var m;
+    while ((m = re.exec(s))) {
+      var k = m[2].replace(/\.+$/, '').toLowerCase();
+      if (k) set.add(k);
+    }
+    return set;
+  }
+
+  // "名字 | 留言", "名字<Tab>留言", or "名字：留言"
+  function splitLine(line, allowColon) {
+    var i = line.indexOf('\t');
+    if (i > 0) return [line.slice(0, i), line.slice(i + 1).trim()];
+    i = line.indexOf('|');
+    if (i > 0) return [line.slice(0, i), line.slice(i + 1).trim()];
+    if (allowColon) {
+      var m = /^(.{1,40}?)\s*[:：]\s*(.*)$/.exec(line);
+      if (m) return [m[1], m[2]];
+    }
+    return [line, ''];
+  }
+  function parsePaste(text, type) {
+    var out = [];
+    String(text || '').split(/\r?\n/).forEach(function (raw) {
+      var line = raw.trim();
+      if (!line) return;
+      var parts = splitLine(line, type === 'comment');
+      var name = cleanName(parts[0]);
+      if (!name) return;
+      out.push({ name: name, handle: '', text: type === 'comment' ? parts[1] : '' });
+    });
+    return out;
+  }
+
+  // Result copied by the 名單抓取工具 bookmarklet.
+  function parseCollected(text) {
+    var t = String(text || '').trim();
+    if (t.charAt(0) !== '{') return null;
+    var o;
+    try { o = JSON.parse(t); } catch (e) { return null; }
+    if (!o || o.giveaway !== 'list' || !Array.isArray(o.items) || !TYPE_LABEL[o.kind]) return null;
+    var records = [];
+    o.items.forEach(function (i) {
+      if (!i) return;
+      var name = cleanName(i.name);
+      if (!name) return;
+      var rec = {
+        name: name,
+        handle: String(i.handle || ''),
+        text: o.kind === 'comment' ? String(i.text || '') : '',
+        tags: Array.isArray(i.tags) ? i.tags.map(String) : null
+      };
+      var url = safeUrl(i.url), link = safeUrl(i.link);
+      if (url) rec.url = url;
+      if (link) rec.link = link;
+      records.push(rec);
+    });
+    var avatars = new Map();
+    if (o.avatars && typeof o.avatars === 'object') {
+      Object.keys(o.avatars).forEach(function (k) {
+        var v = o.avatars[k], key = normKey(k);
+        if (key && typeof v === 'string' && v.length < 200000 && AVATAR_RE.test(v)) avatars.set(key, v);
+      });
+    }
+    return {
+      kind: o.kind,
+      platform: PLATFORM_LABEL[o.platform] || '貼文',
+      sig: [o.platform, o.kind, o.page, o.at].join('|'),
+      tool: typeof o.tool === 'string' ? o.tool.slice(0, 12) : '',
+      records: records,
+      avatars: avatars
+    };
+  }
+  function cmpVer(a, b) {
+    var x = String(a || '0').split('.'), y = String(b || '0').split('.');
+    for (var i = 0; i < Math.max(x.length, y.length); i++) {
+      var d = (parseInt(x[i], 10) || 0) - (parseInt(y[i], 10) || 0);
+      if (d) return d < 0 ? -1 : 1;
+    }
+    return 0;
+  }
+  function isOldTool(v) { return cmpVer(v, COLLECTOR_VERSION) < 0; }
+  function isAtHandle(h) { return /^@/.test(String(h || '')); }
+  // Only https links to the social sites themselves are kept from an imported result.
+  var LINK_HOST = /(^|\.)(facebook\.com|fb\.com|x\.com|twitter\.com|threads\.net|threads\.com|instagram\.com)$/i;
+  function safeUrl(u) {
+    if (!u) return '';
+    try {
+      var x = new URL(String(u));
+      return x.protocol === 'https:' && LINK_HOST.test(x.hostname) ? x.href : '';
+    } catch (e) { return ''; }
+  }
+  var AVATAR_RE = /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+\/]+={0,2}$/;
+
+  function parseDelimited(text) {
+    var first = (text.split(/\r?\n/)[0] || '');
+    var counts = { ',': (first.match(/,/g) || []).length, '\t': (first.match(/\t/g) || []).length, ';': (first.match(/;/g) || []).length };
+    var delim = Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; })[0];
+    if (!counts[delim]) delim = ',';
+    var rows = [], row = [], field = '', q = false;
+    for (var i = 0; i < text.length; i++) {
+      var c = text[i];
+      if (q) {
+        if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else q = false; }
+        else field += c;
+      } else if (c === '"') q = true;
+      else if (c === delim) { row.push(field); field = ''; }
+      else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+      else if (c !== '\r') field += c;
+    }
+    if (field !== '' || row.length) { row.push(field); rows.push(row); }
+    return rows.filter(function (r) { return r.some(function (x) { return x.trim() !== ''; }); });
+  }
+  function headerKind(h) {
+    if (/^(handle|username|user ?id|id|帳號|帳戶|用戶名|使用者名稱|profile|profile ?url|url|link|連結|個人檔案)$/.test(h)) return 'handle';
+    if (/(留言|評論|回覆|內容|comment|text|message|reply)/.test(h)) return 'text';
+    if (/^(type|類型|互動|互動類型|action)$/.test(h)) return 'type';
+    if (/(name|名字|姓名|名稱|暱稱|用戶|使用者|user|author|作者)/.test(h)) return 'name';
+    return null;
+  }
+  function typeFrom(v) {
+    var s = String(v || '').normalize('NFKC').trim().toLowerCase();
+    if (!s) return null;
+    if (/(like|讚|reaction|心情|heart|喜歡)/.test(s)) return 'like';
+    if (/(share|分享|轉發|轉貼|repost|retweet|轉推|quote|引用)/.test(s)) return 'share';
+    if (/(comment|留言|回覆|reply)/.test(s)) return 'comment';
+    return null;
+  }
+  function csvToGroups(rows, fallbackType) {
+    var groups = { comment: [], like: [], share: [] };
+    if (!rows.length) return groups;
+    var header = rows[0].map(function (h) { return String(h).normalize('NFKC').trim().toLowerCase(); });
+    var idx = { name: -1, handle: -1, text: -1, type: -1 };
+    header.forEach(function (h, i) {
+      var kind = headerKind(h);
+      if (kind && idx[kind] === -1) idx[kind] = i;
+    });
+    var body = rows;
+    if (idx.name !== -1 || idx.handle !== -1) body = rows.slice(1);
+    else { idx = { name: 0, handle: -1, text: rows[0].length > 1 ? 1 : -1, type: -1 }; }
+    body.forEach(function (r) {
+      var handle = idx.handle >= 0 ? cleanName(r[idx.handle]) : '';
+      var name = (idx.name >= 0 ? cleanName(r[idx.name]) : '') || handle;
+      if (!name) return;
+      var type = (idx.type >= 0 && typeFrom(r[idx.type])) || fallbackType;
+      groups[type].push({ name: name, handle: handle, text: type === 'comment' && idx.text >= 0 ? String(r[idx.text] || '').trim() : '' });
+    });
+    return groups;
+  }
+
+  // ---------- State ----------
+  function defaultRules() {
+    return { needComment: true, needLike: false, needShare: false, needTag: false, tagCount: 1, needKeyword: false, keywords: '', keywordMode: 'any', exclude: '' };
+  }
+  function makeEmpty() {
+    return {
+      v: 1,
+      sample: false,
+      batches: [],
+      rules: defaultRules(),
+      prizes: [{ id: uid(), name: '頭獎', qty: 1 }],
+      winners: [],
+      log: [],
+      ui: { anim: true, importType: 'comment', filter: 'all', selectedPrize: null, lastWinnerId: null, oldTool: null }
+    };
+  }
+  function makeSample() {
+    var at = Date.now() - 1000 * 60 * 42;
+    var comments = [
+      ['陳小明', '我要抽！@Amy Lim @林雅婷'],
+      ['Amy Lim', '我要抽 好想要 @Jason Tan'],
+      ['林雅婷', '我要抽～ @陳小明 @Kelly Wong'],
+      ['Jason Tan', '可以寄到檳城嗎？'],
+      ['黃志豪', '我要抽 @Siti Aisyah @王大同'],
+      ['Siti Aisyah', '我要抽 @黃志豪 @Kelly Wong'],
+      ['王大同', '+1'],
+      ['Kelly Wong', '我要抽!!! @Amy Lim @Jason Tan'],
+      ['張家瑋', '我要抽 @李佩珊'],
+      ['李佩珊', '我要抽 @張家瑋 @陳小明'],
+      ['Muhammad Hafiz', '我要抽 @Siti Aisyah @Jason Tan'],
+      ['吳美玲', '好漂亮'],
+      ['陳小明', '再留一次 我要抽 @Kelly Wong'],
+      ['@mei.draws', '我要抽 @Amy Lim @吳美玲'],
+      ['Ong Wei Jie', '我要抽 @Muhammad Hafiz @李佩珊'],
+      ['蔡宜臻', '我要抽 @吳美玲 @林雅婷'],
+      ['Rachel Lee', '我要抽 @Ong Wei Jie'],
+      ['劉建宏', '我要抽 @蔡宜臻 @Rachel Lee'],
+      ['Nurul Huda', '我要抽 @劉建宏 @mei.draws'],
+      ['鄭凱文', '抽我抽我 @張家瑋 @王大同'],
+      ['Tan Mei Ling', '我要抽 @Nurul Huda @鄭凱文'],
+      ['Daniel Chong', '我要抽 @Rachel Lee @Ong Wei Jie'],
+      ['小編', '感謝大家參加！11/20 公布結果']
+    ];
+    var likes = ['陳小明', 'Amy Lim', '林雅婷', '黃志豪', 'Siti Aisyah', 'Kelly Wong', '張家瑋', '李佩珊', 'Muhammad Hafiz', 'mei.draws', 'Ong Wei Jie', '蔡宜臻', '劉建宏', 'Nurul Huda', 'Tan Mei Ling', 'Daniel Chong', '王大同', '吳美玲', 'Lim Kah Seng'];
+    var shares = ['陳小明', '林雅婷', 'Kelly Wong', '李佩珊', '黃志豪', 'Nurul Huda', '蔡宜臻', 'Tan Mei Ling', 'Ong Wei Jie', '劉建宏', 'Siti Aisyah', 'Amy Lim'];
+    var s = makeEmpty();
+    s.sample = true;
+    s.batches = [
+      { id: uid(), type: 'comment', source: '範例', at: at, records: comments.map(function (c) { return { name: c[0], handle: '', text: c[1] }; }) },
+      { id: uid(), type: 'like', source: '範例', at: at, records: likes.map(function (n) { return { name: n, handle: '', text: '' }; }) },
+      { id: uid(), type: 'share', source: '範例', at: at, records: shares.map(function (n) { return { name: n, handle: '', text: '' }; }) }
+    ];
+    s.rules = Object.assign(defaultRules(), { needComment: true, needLike: true, needTag: true, tagCount: 2, needKeyword: true, keywords: '我要抽', exclude: '小編' });
+    s.prizes = [
+      { id: uid(), name: '頭獎・藍牙耳機', qty: 1 },
+      { id: uid(), name: '二獎・咖啡禮券', qty: 2 },
+      { id: uid(), name: '參加獎・品牌貼紙', qty: 3 }
+    ];
+    return s;
+  }
+  function normalizeState(s) {
+    var base = makeEmpty();
+    return {
+      v: 1,
+      sample: !!s.sample,
+      batches: Array.isArray(s.batches) ? s.batches.filter(function (b) { return b && Array.isArray(b.records) && TYPE_LABEL[b.type]; }) : [],
+      rules: Object.assign(defaultRules(), s.rules || {}),
+      prizes: Array.isArray(s.prizes) ? s.prizes.map(function (p) { return { id: String(p.id || uid()), name: String(p.name == null ? '' : p.name), qty: clampInt(p.qty, 1, 999, 1) }; }) : base.prizes,
+      winners: Array.isArray(s.winners) ? s.winners : [],
+      log: Array.isArray(s.log) ? s.log : [],
+      ui: Object.assign(base.ui, s.ui || {})
+    };
+  }
+  function load() {
+    try {
+      var raw = localStorage.getItem(STORE_KEY);
+      if (raw) {
+        var s = JSON.parse(raw);
+        if (s && s.v === 1) return normalizeState(s);
+      }
+    } catch (e) { /* storage unavailable: start fresh */ }
+    return makeSample();
+  }
+  var saveTimer = null;
+  function flush() {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(state));
+      var ev = lastEv || evaluate();
+      localStorage.setItem(SUMMARY_KEY, JSON.stringify({
+        at: Date.now(), sample: !!state.sample, people: ev.people.length, eligible: ev.eligibleCount,
+        drawn: state.winners.filter(function (w) { return !w.void; }).length, total: totalQty()
+      }));
+    } catch (e) { /* storage unavailable */ }
+  }
+  function save() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(flush, 150);
+  }
+  window.addEventListener('pagehide', function () { if (saveTimer) flush(); });
+  // The giveaway is open in another tab too: when that tab saves, take its data, so this tab
+  // never writes older data over it. During a draw this tab's result is saved next and wins.
+  window.addEventListener('storage', function (e) {
+    if (e.storageArea !== localStorage || (e.key !== STORE_KEY && e.key !== null)) return;
+    if (busy) return;
+    var s = null;
+    try { s = e.key === null ? null : JSON.parse(e.newValue || 'null'); } catch (err) { /* unreadable: start empty */ }
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    state = s && s.v === 1 ? normalizeState(s) : makeEmpty();
+    syncRuleInputs();
+    $('#opt-anim').checked = !!state.ui.anim;
+    syncImportUI();
+    renderPrizeEditor(true);
+    renderAll();
+    avLoad().then(function () { renderAll(); });
+  });
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden' && saveTimer) flush(); });
+  function addLog(kind, text) {
+    state.log.push({ at: Date.now(), kind: kind, text: text });
+    if (state.log.length > 2000) state.log.splice(0, state.log.length - 2000);
+  }
+
+  // ---------- Avatars ----------
+  // Thumbnails from the 抓取工具 live in IndexedDB (too big for localStorage), keyed like people:
+  // the normalised handle, or the name when there is no handle. Without storage they last until reload.
+  var avatars = new Map();
+  var AV_DB = 'giveaway-draw-avatars', AV_STORE = 'avatars';
+  var avReady = new Promise(function (resolve) {
+    try {
+      var req = indexedDB.open(AV_DB, 1);
+      req.onupgradeneeded = function () { req.result.createObjectStore(AV_STORE); };
+      req.onsuccess = function () { resolve(req.result); };
+      req.onerror = function () { resolve(null); };
+      req.onblocked = function () { resolve(null); };
+    } catch (e) { resolve(null); }
+  });
+  function avTx(fn) {
+    avReady.then(function (db) {
+      if (!db) return;
+      try { fn(db.transaction(AV_STORE, 'readwrite').objectStore(AV_STORE)); } catch (e) { /* storage full or unavailable */ }
+    });
+  }
+  function avLoad() {
+    return avReady.then(function (db) {
+      if (!db) return null;
+      return new Promise(function (resolve) {
+        try {
+          var req = db.transaction(AV_STORE, 'readonly').objectStore(AV_STORE).openCursor();
+          req.onsuccess = function () {
+            var c = req.result;
+            if (!c) { resolve(); return; }
+            if (!avatars.has(c.key)) avatars.set(c.key, c.value);
+            c.continue();
+          };
+          req.onerror = function () { resolve(); };
+        } catch (e) { resolve(); }
+      });
+    });
+  }
+  function avPut(map) {
+    if (!map || !map.size) return;
+    map.forEach(function (v, k) { avatars.set(k, v); });
+    avTx(function (st) { map.forEach(function (v, k) { st.put(v, k); }); });
+  }
+  function avClear() {
+    avatars.clear();
+    avTx(function (st) { st.clear(); });
+  }
+  // Forget pictures of people who are no longer in any list.
+  function avGc() {
+    if (!avatars.size) return;
+    var live = new Set();
+    function add(name, handle) { if (handle) live.add(normKey(handle)); live.add(normKey(name)); }
+    state.batches.forEach(function (b) { b.records.forEach(function (r) { add(r.name, r.handle); }); });
+    state.winners.forEach(function (w) { add(w.name, w.handle); });
+    var dead = [];
+    avatars.forEach(function (v, k) { if (!live.has(k)) dead.push(k); });
+    if (!dead.length) return;
+    dead.forEach(function (k) { avatars.delete(k); });
+    avTx(function (st) { dead.forEach(function (k) { st.delete(k); }); });
+  }
+  function avatarOf(p) {
+    if (!avatars.size || !p) return null;
+    return (p.handle && avatars.get(normKey(p.handle))) || avatars.get(normKey(p.name)) || null;
+  }
+  function anyAvatar(list) { return avatars.size > 0 && list.some(function (p) { return !!avatarOf(p); }); }
+  function hueOf(s) {
+    var h = 0;
+    s = String(s || '');
+    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
+    return h;
+  }
+  function initialOf(s) {
+    var ch = Array.from(String(s || '').replace(/^[@\s]+/, ''))[0] || '?';
+    return ch.toUpperCase();
+  }
+  // A round avatar: the thumbnail when there is one, otherwise the first letter on a colour.
+  function paintAvatar(box, p, src) {
+    if (src === undefined) src = avatarOf(p);
+    if (src) {
+      var img = box.firstElementChild;
+      if (!img || img.tagName !== 'IMG') { img = el('img', { alt: '' }); box.replaceChildren(img); }
+      if (img.getAttribute('src') !== src) img.src = src;
+      box.classList.remove('av-letter');
+    } else {
+      box.textContent = initialOf(p && p.name);
+      box.classList.add('av-letter');
+      box.style.setProperty('--h', String(hueOf(p && p.name)));
+    }
+    return box;
+  }
+  function avatarEl(p, src) { return paintAvatar(el('span', { class: 'av', 'aria-hidden': 'true' }), p, src); }
+  function extLink(href, label, title) {
+    return el('a', { href: href, target: '_blank', rel: 'noopener noreferrer', title: title || null }, label);
+  }
+
+  // ---------- Derived data ----------
+  function buildPeople() {
+    var order = [];
+    var byName = new Map();
+    var byHandle = new Map();
+    var commentCount = 0;
+    state.batches.forEach(function (b) {
+      b.records.forEach(function (r) {
+        var nk = normKey(r.name);
+        var hk = r.handle ? normKey(r.handle) : '';
+        if (!nk && !hk) return;
+        var p = (hk && byHandle.get(hk)) || byName.get(nk) || (hk && byName.get(hk)) || null;
+        if (!p) {
+          p = { key: hk ? 'h:' + hk : 'n:' + nk, name: r.name, handle: r.handle || '', url: '', comments: [], links: [], liked: false, shared: false, mentions: new Set() };
+          order.push(p);
+        }
+        if (hk && !byHandle.has(hk)) byHandle.set(hk, p);
+        if (nk && !byName.has(nk)) byName.set(nk, p);
+        if (!p.handle && r.handle) p.handle = r.handle;
+        if (!p.url && r.url) p.url = r.url;
+        if (b.type === 'comment') {
+          commentCount++;
+          p.comments.push(r.text || '');
+          p.links.push(r.link || '');
+          if (Array.isArray(r.tags)) r.tags.forEach(function (t) { var k = normKey(t); if (k) p.mentions.add(k); });
+          else mentionsOf(r.text).forEach(function (m) { p.mentions.add(m); });
+        } else if (b.type === 'like') p.liked = true;
+        else if (b.type === 'share') p.shared = true;
+      });
+    });
+    return { people: order, commentCount: commentCount };
+  }
+  function keywordList() {
+    return splitList(state.rules.keywords).map(function (k) { return k.normalize('NFKC').toLowerCase(); });
+  }
+  function matchKeywords(comments, kws, mode) {
+    return comments.some(function (c) {
+      var t = String(c || '').normalize('NFKC').toLowerCase();
+      return mode === 'all' ? kws.every(function (k) { return t.indexOf(k) !== -1; }) : kws.some(function (k) { return t.indexOf(k) !== -1; });
+    });
+  }
+  // The comment shown for a winner: the first one with the keyword when that rule is on.
+  function bestComment(p) {
+    var R = state.rules, kws = R.needKeyword ? keywordList() : [];
+    var i = -1;
+    if (kws.length) i = p.comments.findIndex(function (c) { return matchKeywords([c], kws, R.keywordMode); });
+    if (i < 0) i = p.comments.findIndex(function (c) { return String(c).trim(); });
+    if (i < 0 && p.comments.length) i = 0;
+    return i < 0 ? { text: '', link: '' } : { text: p.comments[i] || '', link: (p.links && p.links[i]) || '' };
+  }
+  function evaluate() {
+    var built = buildPeople();
+    var R = state.rules;
+    var kws = R.needKeyword ? keywordList() : [];
+    var excl = new Set(splitList(R.exclude).map(normKey));
+    var ticket = 0;
+    built.people.forEach(function (p) {
+      var reasons = [];
+      if (excl.has(normKey(p.name)) || (p.handle && excl.has(normKey(p.handle)))) reasons.push('在排除名單');
+      if (R.needComment && !p.comments.length) reasons.push('沒有留言');
+      if (R.needLike && !p.liked) reasons.push('沒有按讚');
+      if (R.needShare && !p.shared) reasons.push('沒有分享');
+      if (R.needTag && p.mentions.size < R.tagCount) reasons.push('只標記 ' + p.mentions.size + ' 位（需要 ' + R.tagCount + ' 位）');
+      if (R.needKeyword && kws.length && !matchKeywords(p.comments, kws, R.keywordMode)) reasons.push('留言沒有關鍵字');
+      p.reasons = reasons;
+      p.eligible = reasons.length === 0;
+      p.ticket = p.eligible ? ++ticket : 0;
+    });
+    return { people: built.people, commentCount: built.commentCount, eligibleCount: ticket };
+  }
+  function poolOf(ev) {
+    var drawn = new Set(state.winners.map(function (w) { return w.key; }));
+    return ev.people.filter(function (p) { return p.eligible && !drawn.has(p.key); });
+  }
+  function prizeName(p) { return (p && String(p.name).trim()) || '未命名獎項'; }
+  function prizeById(id) { return state.prizes.find(function (p) { return p.id === id; }) || null; }
+  function activeWinners(id) { return state.winners.filter(function (w) { return w.prizeId === id && !w.void; }); }
+  function remainingOf(p) { return Math.max(0, p.qty - activeWinners(p.id).length); }
+  function totalQty() { return state.prizes.reduce(function (a, p) { return a + p.qty; }, 0); }
+  function currentPrize() {
+    var p = prizeById(state.ui.selectedPrize);
+    if (!p || remainingOf(p) === 0) {
+      var next = state.prizes.find(function (x) { return remainingOf(x) > 0; });
+      if (next) p = next;
+    }
+    if (!p) p = state.prizes[0] || null;
+    state.ui.selectedPrize = p ? p.id : null;
+    return p;
+  }
+  function rulesSummary() {
+    var R = state.rules, parts = [];
+    if (R.needComment) parts.push('需留言');
+    if (R.needLike) parts.push('需按讚');
+    if (R.needShare) parts.push('需分享');
+    if (R.needTag) parts.push('需標記 ' + R.tagCount + ' 位');
+    var kws = splitList(R.keywords);
+    if (R.needKeyword && kws.length) parts.push('留言含「' + kws.join('」' + (R.keywordMode === 'all' ? '和「' : '或「')) + '」');
+    var ex = splitList(R.exclude).length;
+    if (ex) parts.push('排除 ' + ex + ' 人');
+    parts.push('同一人只算一次');
+    return parts.join('、');
+  }
+
+  // ---------- UI helpers ----------
+  var toastTimer = null;
+  function toast(msg) {
+    var t = $('#toast');
+    t.textContent = msg;
+    t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.hidden = true; }, 3400);
+  }
+  function announce(msg) {
+    var a = $('#announcer');
+    a.textContent = '';
+    setTimeout(function () { a.textContent = msg; }, 30);
+  }
+  // Two-step confirmation inside the page (the viewer does not show confirm dialogs).
+  function twoStep(btn, armedText, action) {
+    var orig = btn.textContent;
+    var timer = null;
+    btn.addEventListener('click', function () {
+      if (btn.dataset.armed === '1') {
+        clearTimeout(timer);
+        btn.dataset.armed = '';
+        btn.textContent = orig;
+        action();
+        return;
+      }
+      btn.dataset.armed = '1';
+      btn.textContent = armedText;
+      timer = setTimeout(function () { btn.dataset.armed = ''; btn.textContent = orig; }, 3500);
+    });
+  }
+
+  // ---------- Rendering ----------
+  function renderToolBanner() {
+    var v = state.ui.oldTool;
+    $('#tool-banner').hidden = !v;
+    if (!v) return;
+    $('#tool-banner-title').textContent = '抓取工具有新版 v' + COLLECTOR_VERSION + '。';
+    $('#tool-banner-text').textContent = '你剛剛加入的名單是用舊版' + (v !== '?' ? '（v' + v + '）' : '') + '抓的，名單已經照常加入。下次抓之前，請先刪掉書籤列上的「抓取抽獎名單」，再照安裝說明重新拖一次新版。';
+  }
+  function renderAll() {
+    var ev = evaluate();
+    renderStats(ev);
+    $('#sample-banner').hidden = !state.sample;
+    renderToolBanner();
+    renderBatches();
+    renderPeople(ev);
+    renderPrizeEditor(false);
+    renderStage(ev);
+    renderWinners();
+    renderLog();
+    applyLock();
+  }
+
+  function renderStats(ev) {
+    lastEv = ev;
+    $('#s-comments').textContent = ev.commentCount;
+    $('#s-people').textContent = ev.people.length;
+    $('#s-eligible').textContent = ev.eligibleCount;
+    $('#s-drawn').textContent = state.winners.filter(function (w) { return !w.void; }).length + ' / ' + totalQty();
+  }
+
+  function syncImportUI() {
+    var t = state.ui.importType;
+    $$('#import-type button').forEach(function (b) { b.setAttribute('aria-checked', String(b.dataset.type === t)); });
+    $('#paste-label').textContent = '貼上' + TYPE_LABEL[t] + '者名單';
+    $('#paste').placeholder = PLACEHOLDER[t];
+    $('#paste-hint').textContent = HINT[t];
+    renderPreview();
+  }
+  // A pasted 抓取工具 result can be several MB (avatars), so it is kept aside and the box shows a summary.
+  var pending = null;
+  function collectedSummary(col) {
+    var people = new Set(col.records.map(function (r) { return normKey(r.handle || r.name); })).size;
+    var what = col.kind === 'comment' ? col.records.length + ' 則留言・' + people + ' 位' : col.records.length + ' 位' + TYPE_LABEL[col.kind] + '的人';
+    return '【' + col.platform + ' 抓取結果】' + what + (col.avatars.size ? '・' + col.avatars.size + ' 張頭像' : '') + '\n已讀取，按下面的「加入名單」就會加入。';
+  }
+  function currentCollected() {
+    var v = $('#paste').value;
+    if (pending && v === pending.text) return pending.col;
+    return parseCollected(v);
+  }
+  function colAvatar(col, r) {
+    return (r.handle && col.avatars.get(normKey(r.handle))) || col.avatars.get(normKey(r.name)) || null;
+  }
+  function renderPreview() {
+    var type = state.ui.importType;
+    var box = $('#preview');
+    var col = currentCollected();
+    if (col) {
+      var people = new Set(col.records.map(function (r) { return normKey(r.handle || r.name); })).size;
+      var head = '偵測到 ' + col.platform + ' 抓取結果：' + col.records.length + (col.kind === 'comment' ? ' 則留言，' + people + ' 位不重複' : ' 位' + TYPE_LABEL[col.kind] + '的人') + (col.avatars.size ? '，' + col.avatars.size + ' 張頭像' : '');
+      var rows = [el('p', { class: 'preview-head' }, head)];
+      col.records.slice(0, 3).forEach(function (r) {
+        rows.push(el('div', { class: 'preview-row' }, col.avatars.size ? avatarEl(r, colAvatar(col, r)) : null, el('b', null, r.name), col.kind === 'comment' ? el('span', null, r.text || '（沒有文字，例如貼圖）') : null));
+      });
+      if (col.records.length > 3) rows.push(el('p', { class: 'preview-more' }, '…還有 ' + (col.records.length - 3) + ' 筆'));
+      if (isOldTool(col.tool)) rows.push(el('p', { class: 'preview-warn' }, '這是用舊版抓取工具' + (col.tool ? '（v' + col.tool + '）' : '') + '抓的，可以照常加入，但建議更新到 v' + COLLECTOR_VERSION + '。'));
+      box.hidden = false;
+      box.replaceChildren.apply(box, rows);
+      return;
+    }
+    var recs = parsePaste($('#paste').value, type);
+    if (!recs.length) { box.hidden = true; box.replaceChildren(); return; }
+    var uniq = new Set(recs.map(function (r) { return normKey(r.name); })).size;
+    box.hidden = false;
+    var kids = [el('p', { class: 'preview-head' }, '讀到 ' + recs.length + ' 筆' + TYPE_LABEL[type] + '，' + uniq + ' 位不重複')];
+    recs.slice(0, 3).forEach(function (r) {
+      kids.push(el('div', { class: 'preview-row' }, el('b', null, r.name), type === 'comment' ? el('span', null, r.text || '（沒有留言內容）') : null));
+    });
+    if (recs.length > 3) kids.push(el('p', { class: 'preview-more' }, '…還有 ' + (recs.length - 3) + ' 筆'));
+    box.replaceChildren.apply(box, kids);
+  }
+
+  function renderBatches() {
+    var box = $('#batches');
+    if (!state.batches.length) {
+      box.replaceChildren(el('p', { class: 'hint' }, '還沒有名單。先貼上留言者名單，或匯入 CSV 檔。'));
+      return;
+    }
+    box.replaceChildren.apply(box, [el('p', { class: 'batches-title' }, '已匯入的名單')].concat(
+      state.batches.map(function (b) {
+        var rm = el('button', { type: 'button', class: 'btn btn-ghost' }, '移除');
+        twoStep(rm, '確定移除？', function () {
+          state.batches = state.batches.filter(function (x) { return x.id !== b.id; });
+          avGc();
+          save();
+          renderAll();
+          toast('已移除這份' + TYPE_LABEL[b.type] + '名單');
+        });
+        return el('div', { class: 'batch' },
+          el('span', { class: 'pill pill-' + b.type }, TYPE_LABEL[b.type]),
+          el('span', { class: 'what' }, b.records.length + ' 筆', el('small', null, b.source + '・' + fmtShort(b.at))),
+          rm
+        );
+      })
+    ));
+  }
+
+  function personRow(p, ev, w) {
+    var meta = [];
+    if (p.comments.length) meta.push(p.comments.length > 1 ? '留言 ' + p.comments.length + ' 則（算 1 次）' : '留言');
+    if (p.liked) meta.push('按讚');
+    if (p.shared) meta.push('分享');
+    if (p.mentions.size) meta.push('標記 ' + p.mentions.size + ' 位');
+    var status;
+    if (w) status = el('span', { class: 'pill ' + (w.void ? 'pill-void' : 'pill-won') }, w.void ? '已作廢' : '已得獎');
+    else if (p.eligible) status = el('span', { class: 'pill pill-ok' }, '符合');
+    else status = el('span', { class: 'pill pill-warn' }, '不符合');
+    var showHandle = isAtHandle(p.handle) && normKey(p.handle) !== normKey(p.name);
+    var href = safeUrl(p.url);
+    return el('li', { class: 'person' },
+      el('span', { class: 'no' + (p.eligible ? '' : ' none') }, p.eligible ? fmtTicket(p.ticket, ev.eligibleCount) : '—'),
+      avatarEl(p),
+      el('div', { class: 'who' },
+        el('div', { class: 'name' }, href ? extLink(href, p.name, '打開個人檔案') : p.name, showHandle ? el('span', { class: 'handle' }, p.handle) : null),
+        meta.length ? el('div', { class: 'meta' }, meta.map(function (m) { return el('span', null, m); })) : null,
+        p.reasons.length ? el('div', { class: 'reasons' }, p.reasons.join('、')) : null
+      ),
+      status
+    );
+  }
+  function renderPeople(ev) {
+    var f = state.ui.filter || 'all';
+    var all = ev.people.length, ok = ev.eligibleCount;
+    $('#f-all').textContent = all;
+    $('#f-ok').textContent = ok;
+    $('#f-no').textContent = all - ok;
+    $$('#people-filter button').forEach(function (b) { b.setAttribute('aria-checked', String(b.dataset.f === f)); });
+    var q = normKey($('#people-q').value);
+    var won = new Map();
+    state.winners.forEach(function (w) { won.set(w.key, w); });
+    var list = ev.people;
+    if (f === 'ok') list = list.filter(function (p) { return p.eligible; });
+    else if (f === 'no') list = list.filter(function (p) { return !p.eligible; });
+    if (q) list = list.filter(function (p) { return normKey(p.name).indexOf(q) !== -1 || (p.handle && normKey(p.handle).indexOf(q) !== -1); });
+    var LIMIT = 300;
+    var ul = $('#people');
+    if (!list.length) ul.replaceChildren(el('li', { class: 'person-empty' }, all ? '沒有符合篩選的人。' : '還沒有參加者，先在第 1 步貼上名單。'));
+    else ul.replaceChildren.apply(ul, list.slice(0, LIMIT).map(function (p) { return personRow(p, ev, won.get(p.key)); }));
+    var more = $('#people-more');
+    more.hidden = list.length <= LIMIT;
+    more.textContent = '只顯示前 ' + LIMIT + ' 位，還有 ' + (list.length - LIMIT) + ' 位，可以用搜尋找人。';
+  }
+
+  var prizeSig = '';
+  function renderPrizeEditor(force) {
+    var list = $('#prize-list');
+    var sig = state.prizes.map(function (p) { return p.id; }).join(',');
+    if (force || sig !== prizeSig) {
+      prizeSig = sig;
+      list.replaceChildren.apply(list, state.prizes.map(function (p, i) {
+        var name = el('input', { type: 'text', id: 'prize-name-' + p.id, value: p.name, maxlength: '60', placeholder: '獎項名稱', 'aria-label': '第 ' + (i + 1) + ' 個獎項名稱' });
+        var qty = el('input', { type: 'number', id: 'prize-qty-' + p.id, value: String(p.qty), min: '1', max: '999', inputmode: 'numeric', 'aria-label': '第 ' + (i + 1) + ' 個獎項名額' });
+        var del = el('button', { type: 'button', class: 'icon-btn', 'aria-label': '刪除獎品' }, '×');
+        name.addEventListener('input', function () { p.name = name.value; save(); renderAll(); });
+        qty.addEventListener('input', function () {
+          var used = activeWinners(p.id).length;
+          var v = parseInt(qty.value, 10);
+          if (isFinite(v) && v >= Math.max(1, used)) { p.qty = Math.min(999, v); save(); renderAll(); }
+        });
+        qty.addEventListener('change', function () { qty.value = String(p.qty); });
+        del.addEventListener('click', function () {
+          state.prizes = state.prizes.filter(function (x) { return x.id !== p.id; });
+          save();
+          renderAll();
+        });
+        return el('li', { class: 'prize-row', 'data-id': p.id }, name, qty, del);
+      }));
+    }
+    $$('.prize-row', list).forEach(function (row) {
+      var p = prizeById(row.dataset.id);
+      if (!p) return;
+      var used = activeWinners(p.id).length;
+      var any = state.winners.some(function (w) { return w.prizeId === p.id; });
+      $('input[type="number"]', row).min = String(Math.max(1, used));
+      var del = $('.icon-btn', row);
+      del.disabled = any || busy;
+      del.title = any ? '這個獎項已經抽出得獎者，不能刪除' : '刪除獎品';
+    });
+    $('#prize-total').textContent = state.prizes.length ? '共 ' + state.prizes.length + ' 個獎項、' + totalQty() + ' 個名額' : '還沒有獎品';
+  }
+
+  function setTicket(o) {
+    $('#ticket').dataset.mode = o.mode;
+    $('#t-prize').textContent = o.prize;
+    $('#t-no').textContent = o.no;
+    $('#t-name').textContent = o.name;
+    var q = $('#t-quote');
+    q.hidden = !o.quote;
+    q.textContent = o.quote ? '「' + o.quote + '」' : '';
+    $('#t-foot').replaceChildren.apply($('#t-foot'), o.foot.map(function (x) { return el('span', null, x); }));
+    $('#t-seal').hidden = !o.seal;
+    var av = $('#t-av');
+    av.hidden = !o.person;
+    if (o.person) paintAvatar(av, o.person);
+  }
+  function renderChips(cur) {
+    var box = $('#prize-chips');
+    box.replaceChildren.apply(box, state.prizes.map(function (p) {
+      var rem = remainingOf(p);
+      var b = el('button', { type: 'button', role: 'radio', class: 'prize-chip', 'aria-checked': String(!!cur && cur.id === p.id), disabled: busy || rem === 0 },
+        el('span', { class: 'pname' }, prizeName(p)),
+        el('span', { class: 'left' }, rem === 0 ? '已抽完' : '剩 ' + rem));
+      b.addEventListener('click', function () {
+        state.ui.selectedPrize = p.id;
+        save();
+        renderStage(evaluate());
+      });
+      return b;
+    }));
+  }
+  function renderStage(ev) {
+    var pool = poolOf(ev);
+    var cur = currentPrize();
+    var rem = cur ? remainingOf(cur) : 0;
+    var totalRem = state.prizes.reduce(function (a, p) { return a + remainingOf(p); }, 0);
+    var allDone = state.prizes.length > 0 && totalRem === 0;
+
+    $('#pool-line').textContent = ev.people.length
+      ? '符合資格 ' + ev.eligibleCount + ' 位，抽獎池還有 ' + pool.length + ' 位'
+      : '先在第 1 步匯入參加者名單';
+    renderChips(cur);
+
+    var warn = '';
+    if (ev.people.length && ev.eligibleCount === 0) warn = '目前沒有人符合條件，請檢查名單，或放寬第 2 步的條件。';
+    else if (!allDone && ev.eligibleCount > 0 && pool.length < totalRem) warn = '抽獎池只剩 ' + pool.length + ' 位，比剩下的 ' + totalRem + ' 個名額少，有些獎項會抽不滿。';
+    $('#pool-warn').textContent = warn;
+    $('#pool-warn').hidden = !warn;
+
+    var canDraw = !busy && !!cur && rem > 0 && pool.length > 0;
+    $('#btn-draw').disabled = !canDraw;
+    var rest = $('#btn-draw-rest');
+    rest.hidden = !(cur && rem > 1);
+    rest.textContent = '抽完剩下 ' + rem + ' 位';
+    rest.disabled = !canDraw;
+
+    if (rolling) return;
+
+    var last = state.winners.find(function (w) { return w.id === state.ui.lastWinnerId; });
+    if (last && !last.void && prizeById(last.prizeId)) {
+      var lp = prizeById(last.prizeId);
+      var rank = activeWinners(lp.id).indexOf(last) + 1;
+      setTicket({
+        mode: 'won',
+        prize: prizeName(lp),
+        no: 'No. ' + String(last.ticketText).replace('#', ''),
+        name: last.name,
+        quote: last.comment ? (last.comment.length > 70 ? last.comment.slice(0, 70) + '…' : last.comment) : '',
+        foot: ['第 ' + rank + ' / ' + lp.qty + ' 名', '當時抽獎池 ' + last.pool + ' 位', fmtTime(last.at)],
+        seal: true,
+        person: anyAvatar(ev.people) ? { name: last.name, handle: last.handle } : null
+      });
+      return;
+    }
+    var msg;
+    if (!state.prizes.length) msg = '先在第 3 步新增獎品';
+    else if (!ev.people.length) msg = '先在第 1 步匯入參加者名單';
+    else if (ev.eligibleCount === 0) msg = '目前沒有人符合條件';
+    else if (allDone) msg = '全部獎項都抽完了';
+    else if (!pool.length) msg = '抽獎池已經沒有人了';
+    else msg = '按下「抽出 1 位」開始抽獎';
+    setTicket({
+      mode: 'idle',
+      prize: allDone ? '抽獎完成' : (cur ? '下一個：' + prizeName(cur) : '還沒有獎品'),
+      no: 'No. ———',
+      name: msg,
+      quote: '',
+      foot: ['符合資格 ' + ev.eligibleCount + ' 位', '抽獎池 ' + pool.length + ' 位'],
+      seal: false,
+      person: null
+    });
+  }
+
+  function winnerRow(w) {
+    var sub = [fmtTime(w.at)];
+    if (isAtHandle(w.handle) && normKey(w.handle) !== normKey(w.name)) sub.push(w.handle);
+    if (w.comment) sub.push('「' + w.comment + '」');
+    var action;
+    if (w.void) action = el('span', { class: 'pill pill-void' }, '已作廢');
+    else {
+      action = el('button', { type: 'button', class: 'btn btn-ghost', disabled: busy }, '作廢');
+      twoStep(action, '確定作廢？', function () { voidWinner(w.id); });
+    }
+    var url = safeUrl(w.url), link = safeUrl(w.link);
+    var links = [];
+    if (url) links.push(extLink(url, '個人檔案 ↗'));
+    if (link) links.push(extLink(link, '看留言 ↗'));
+    return el('li', { class: 'wrow' + (w.void ? ' void' : '') },
+      el('span', { class: 'no' }, w.ticketText),
+      avatarEl({ name: w.name, handle: w.handle }),
+      el('div', { class: 'who' },
+        el('div', { class: 'name' }, url ? extLink(url, w.name, '打開個人檔案') : w.name),
+        el('div', { class: 'sub2' }, sub.join('・')),
+        links.length ? el('div', { class: 'wlinks' }, links) : null
+      ),
+      action
+    );
+  }
+  function renderWinners() {
+    var box = $('#winners');
+    if (!state.prizes.length) {
+      box.replaceChildren(el('p', { class: 'wempty' }, '還沒有獎品。'));
+    } else {
+      box.replaceChildren.apply(box, state.prizes.map(function (p) {
+        var ws = state.winners.filter(function (w) { return w.prizeId === p.id; });
+        return el('div', { class: 'wgroup' },
+          el('div', { class: 'wgroup-head' }, el('span', null, prizeName(p)), el('span', { class: 'count' }, activeWinners(p.id).length + ' / ' + p.qty)),
+          ws.length ? el('ol', { class: 'wlist' }, ws.map(winnerRow)) : el('p', { class: 'wempty' }, '尚未抽出')
+        );
+      }));
+    }
+    $('#btn-copy').disabled = !state.winners.some(function (w) { return !w.void; });
+    $('#btn-csv').disabled = !state.winners.length;
+  }
+
+  function renderLog() {
+    $('#log-count').textContent = state.log.length;
+    $('#log-empty').hidden = state.log.length > 0;
+    var list = $('#log-list');
+    list.replaceChildren.apply(list, state.log.slice().reverse().map(function (l) {
+      return el('li', { class: 'log-' + l.kind }, el('time', null, fmtDate(l.at, true)), el('span', null, l.text));
+    }));
+  }
+
+  function applyLock() {
+    var locked = state.winners.length > 0 || busy;
+    $$('[data-lockable] input, [data-lockable] textarea, [data-lockable] select, [data-lockable] button').forEach(function (n) { n.disabled = locked; });
+    $$('.lock-note').forEach(function (n) { n.hidden = !state.winners.length; });
+    $('#btn-add-prize').disabled = busy;
+    $('#btn-reset').disabled = busy || !state.winners.length;
+    $('#btn-wipe').disabled = busy;
+    $('#btn-clear-sample').disabled = busy;
+  }
+
+  function syncRuleInputs() {
+    RULE_FIELDS.forEach(function (f) {
+      var n = $(f[1]);
+      if (f[2] === 'check') n.checked = !!state.rules[f[0]];
+      else n.value = state.rules[f[0]];
+    });
+  }
+
+  // ---------- Drawing ----------
+  function roll(pool, pick, prize, ev, fast) {
+    rolling = true;
+    var withAv = anyAvatar(pool);
+    setTicket({ mode: 'rolling', prize: prizeName(prize), no: 'No. ———', name: '', quote: '', foot: ['抽獎池 ' + pool.length + ' 位', '抽獎中…'], seal: false, person: withAv ? pool[0] : null });
+    var nameEl = $('#t-name'), noEl = $('#t-no'), avEl = $('#t-av');
+    var total = fast ? 1100 : 2400;
+    var t0 = performance.now();
+    var last = -1;
+    return new Promise(function (resolve) {
+      (function step() {
+        var t = (performance.now() - t0) / total;
+        if (t >= 1) {
+          nameEl.textContent = pick.name;
+          noEl.textContent = 'No. ' + fmtTicket(pick.ticket, ev.eligibleCount).replace('#', '');
+          if (withAv) paintAvatar(avEl, pick);
+          resolve();
+          return;
+        }
+        var i = Math.floor(Math.random() * pool.length);
+        if (pool.length > 1 && i === last) i = (i + 1) % pool.length;
+        last = i;
+        nameEl.textContent = pool[i].name;
+        noEl.textContent = 'No. ' + fmtTicket(pool[i].ticket, ev.eligibleCount).replace('#', '');
+        if (withAv) paintAvatar(avEl, pool[i]);
+        setTimeout(step, 40 + Math.pow(t, 2.4) * 300);
+      })();
+    });
+  }
+  function stamp() {
+    var s = $('#t-seal');
+    if (s.hidden || !animOn()) return;
+    s.classList.remove('stamp');
+    void s.offsetWidth;
+    s.classList.add('stamp');
+  }
+  async function drawOne(prizeId, fast) {
+    var prize = prizeById(prizeId);
+    if (!prize || remainingOf(prize) <= 0) return false;
+    var ev = evaluate();
+    var pool = poolOf(ev);
+    if (!pool.length) { toast('抽獎池已經沒有符合資格的人了'); return false; }
+    var pick = pool[randInt(pool.length)];
+    try {
+      if (animOn()) await roll(pool, pick, prize, ev, fast);
+    } finally {
+      rolling = false;
+    }
+    if (!state.winners.length) addLog('start', '開始抽獎。符合資格 ' + ev.eligibleCount + ' 位；條件：' + rulesSummary());
+    var best = bestComment(pick);
+    var w = {
+      id: uid(),
+      prizeId: prize.id,
+      key: pick.key,
+      name: pick.name,
+      handle: pick.handle || '',
+      ticket: pick.ticket,
+      ticketText: fmtTicket(pick.ticket, ev.eligibleCount),
+      comment: best.text,
+      link: best.link,
+      url: pick.url || '',
+      at: Date.now(),
+      pool: pool.length,
+      void: false
+    };
+    state.winners.push(w);
+    state.ui.lastWinnerId = w.id;
+    addLog('draw', prizeName(prize) + '：抽出 ' + w.name + '（' + w.ticketText + '，抽獎池 ' + pool.length + ' 位）');
+    save();
+    renderAll();
+    stamp();
+    announce(prizeName(prize) + '得獎者：' + w.name);
+    return true;
+  }
+  function voidWinner(id) {
+    var w = state.winners.find(function (x) { return x.id === id; });
+    if (!w || w.void || busy) return;
+    w.void = true;
+    w.voidAt = Date.now();
+    var p = prizeById(w.prizeId);
+    addLog('void', '作廢 ' + prizeName(p) + '：' + w.name + '（不放回抽獎池）');
+    if (p) state.ui.selectedPrize = p.id;
+    save();
+    renderAll();
+    toast('已作廢 ' + w.name + '，' + prizeName(p) + ' 多出 1 個名額，可以再抽');
+  }
+
+  // ---------- Export ----------
+  function announcementText() {
+    var ev = evaluate();
+    var lines = ['【抽獎結果】'];
+    state.prizes.forEach(function (p) {
+      var ws = activeWinners(p.id);
+      lines.push('', prizeName(p) + '（' + p.qty + ' 名）');
+      ws.forEach(function (w, i) {
+        lines.push((i + 1) + '. ' + w.name + (isAtHandle(w.handle) && normKey(w.handle) !== normKey(w.name) ? '（' + w.handle + '）' : ''));
+      });
+      if (ws.length < p.qty) lines.push(ws.length ? '還有 ' + (p.qty - ws.length) + ' 名未抽出' : '尚未抽出');
+    });
+    var first = state.winners[0];
+    lines.push('', '符合資格共 ' + ev.eligibleCount + ' 位' + (first ? '，抽獎時間 ' + fmtDate(first.at) : '') + '。');
+    return lines.join('\n');
+  }
+  function csvCell(v) {
+    var s = String(v == null ? '' : v);
+    if (/^[=+\-@]/.test(s)) s = "'" + s;
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  function resultCSV() {
+    var rows = [['獎項', '名次', '抽獎編號', '名字', '帳號', '個人檔案連結', '留言', '留言連結', '狀態', '抽出時間', '當時抽獎池人數', '作廢時間']];
+    state.prizes.forEach(function (p) {
+      var rank = 0;
+      state.winners.filter(function (w) { return w.prizeId === p.id; }).forEach(function (w) {
+        rows.push([prizeName(p), w.void ? '' : String(++rank), w.ticketText, w.name, isAtHandle(w.handle) ? w.handle : '', safeUrl(w.url), w.comment || '', safeUrl(w.link), w.void ? '作廢' : '有效', fmtDate(w.at, true), String(w.pool), w.void && w.voidAt ? fmtDate(w.voidAt, true) : '']);
+      });
+    });
+    return '\uFEFF' + rows.map(function (r) { return r.map(csvCell).join(','); }).join('\r\n');
+  }
+
+  // ---------- Events ----------
+  var RULE_FIELDS = [
+    ['needComment', '#r-comment', 'check'],
+    ['needLike', '#r-like', 'check'],
+    ['needShare', '#r-share', 'check'],
+    ['needTag', '#r-tag', 'check'],
+    ['tagCount', '#r-tag-n', 'int'],
+    ['needKeyword', '#r-kw', 'check'],
+    ['keywords', '#r-kw-text', 'text'],
+    ['keywordMode', '#r-kw-mode', 'text'],
+    ['exclude', '#r-exclude', 'text']
+  ];
+
+  function addCollected(col, how) {
+    if (!col.records.length) { toast('這份抓取結果裡沒有名字'); return; }
+    if (state.batches.some(function (b) { return b.sig && b.sig === col.sig; })) { toast('這份抓取結果已經加入過了'); return; }
+    var cleared = clearSampleIfNeeded();
+    state.batches.push({ id: uid(), type: col.kind, source: col.platform + ' 抓取', sig: col.sig, at: Date.now(), records: col.records });
+    avPut(col.avatars);
+    state.ui.oldTool = isOldTool(col.tool) ? (col.tool || '?') : null;
+    if (how === '貼上') { pending = null; $('#paste').value = ''; renderPreview(); }
+    save();
+    renderAll();
+    toast((cleared ? '已清除範例資料，' : '') + '加入 ' + col.platform + ' 抓取的 ' + col.records.length + (col.kind === 'comment' ? ' 則留言' : ' 位' + TYPE_LABEL[col.kind] + '的人') + (col.avatars.size ? '（含 ' + col.avatars.size + ' 張頭像）' : ''));
+  }
+
+  function clearSampleIfNeeded() {
+    if (!state.sample) return false;
+    var ui = state.ui;
+    state = makeEmpty();
+    state.ui.anim = ui.anim;
+    state.ui.importType = ui.importType;
+    syncRuleInputs();
+    renderPrizeEditor(true);
+    $('#copy-box').hidden = true;
+    return true;
+  }
+
+  function wire() {
+    $$('#import-type button').forEach(function (b) {
+      b.addEventListener('click', function () {
+        state.ui.importType = b.dataset.type;
+        save();
+        syncImportUI();
+      });
+    });
+
+    var previewTimer = null;
+    $('#paste').addEventListener('input', function () {
+      if (pending && $('#paste').value !== pending.text) pending = null;
+      clearTimeout(previewTimer);
+      previewTimer = setTimeout(renderPreview, 120);
+    });
+    $('#paste').addEventListener('paste', function (e) {
+      var t = e.clipboardData && e.clipboardData.getData('text/plain');
+      var col = t ? parseCollected(t) : null;
+      if (!col) return;
+      e.preventDefault();
+      pending = { text: collectedSummary(col), col: col };
+      $('#paste').value = pending.text;
+      clearTimeout(previewTimer);
+      renderPreview();
+    });
+
+    $('#btn-add').addEventListener('click', function () {
+      var col = currentCollected();
+      if (col) { addCollected(col, '貼上'); return; }
+      var type = state.ui.importType;
+      var recs = parsePaste($('#paste').value, type);
+      if (!recs.length) { toast('沒有讀到名字，請每行貼上一位'); return; }
+      var cleared = clearSampleIfNeeded();
+      state.batches.push({ id: uid(), type: type, source: '貼上', at: Date.now(), records: recs });
+      $('#paste').value = '';
+      renderPreview();
+      save();
+      renderAll();
+      toast((cleared ? '已清除範例資料，' : '') + '加入 ' + recs.length + ' 筆' + TYPE_LABEL[type] + '名單');
+    });
+
+    $('#btn-file').addEventListener('click', function () { $('#file').click(); });
+    $('#file').addEventListener('change', function (e) {
+      var f = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if (!f) return;
+      var ext = ((f.name.match(/\.([a-z0-9]+)$/i) || [])[1] || '').toLowerCase();
+      if (ext === 'xlsx' || ext === 'xls') { toast('請先在 Excel 用「另存新檔」存成 CSV（UTF-8），再匯入'); return; }
+      f.text().then(function (text) {
+        text = text.replace(/^\uFEFF/, '');
+        var col = parseCollected(text);
+        if (col) { addCollected(col, '檔案'); return; }
+        var type = state.ui.importType;
+        var firstLine = text.split(/\r?\n/)[0] || '';
+        var isTable = ext === 'csv' || ext === 'tsv' || (!ext && /[,\t]/.test(firstLine));
+        var groups;
+        if (isTable) groups = csvToGroups(parseDelimited(text), type);
+        else { groups = { comment: [], like: [], share: [] }; groups[type] = parsePaste(text, type); }
+        var total = groups.comment.length + groups.like.length + groups.share.length;
+        if (!total) { toast('檔案裡沒有讀到名字'); return; }
+        var cleared = clearSampleIfNeeded();
+        ['comment', 'like', 'share'].forEach(function (t) {
+          if (groups[t].length) state.batches.push({ id: uid(), type: t, source: '檔案 ' + f.name, at: Date.now(), records: groups[t] });
+        });
+        save();
+        renderAll();
+        toast((cleared ? '已清除範例資料，' : '') + '從 ' + f.name + ' 加入 ' + total + ' 筆');
+      }, function () { toast('讀不到這個檔案'); });
+    });
+
+    RULE_FIELDS.forEach(function (f) {
+      var key = f[0], n = $(f[1]), kind = f[2];
+      var evName = kind === 'check' || n.tagName === 'SELECT' ? 'change' : 'input';
+      n.addEventListener(evName, function () {
+        if (kind === 'check') state.rules[key] = n.checked;
+        else if (kind === 'int') state.rules[key] = clampInt(n.value, 1, 20, state.rules[key]);
+        else state.rules[key] = n.value;
+        if (key === 'keywords' && n.value.trim() && !state.rules.needKeyword) { state.rules.needKeyword = true; $('#r-kw').checked = true; }
+        if (key === 'tagCount' && !state.rules.needTag) { state.rules.needTag = true; $('#r-tag').checked = true; }
+        save();
+        renderAll();
+      });
+    });
+    $('#r-tag-n').addEventListener('change', function () { $('#r-tag-n').value = state.rules.tagCount; });
+
+    $$('#people-filter button').forEach(function (b) {
+      b.addEventListener('click', function () {
+        state.ui.filter = b.dataset.f;
+        save();
+        renderPeople(evaluate());
+      });
+    });
+    $('#people-q').addEventListener('input', function () { renderPeople(evaluate()); });
+
+    $('#btn-add-prize').addEventListener('click', function () {
+      state.prizes.push({ id: uid(), name: '獎項 ' + (state.prizes.length + 1), qty: 1 });
+      save();
+      renderAll();
+      var inputs = $$('#prize-list input[type="text"]');
+      var lastInput = inputs[inputs.length - 1];
+      if (lastInput) { lastInput.focus(); lastInput.select(); }
+    });
+
+    $('#btn-draw').addEventListener('click', async function () {
+      if (busy) return;
+      var p = currentPrize();
+      if (!p) return;
+      busy = true;
+      $('#copy-box').hidden = true;
+      renderAll();
+      try { await drawOne(p.id, false); }
+      finally { busy = false; renderAll(); }
+    });
+    $('#btn-draw-rest').addEventListener('click', async function () {
+      if (busy) return;
+      var p = currentPrize();
+      if (!p) return;
+      busy = true;
+      $('#copy-box').hidden = true;
+      renderAll();
+      try {
+        var n = remainingOf(p);
+        for (var i = 0; i < n; i++) {
+          var ok = await drawOne(p.id, true);
+          if (!ok) break;
+          if (animOn() && i < n - 1) await sleep(900);
+        }
+      } finally { busy = false; renderAll(); }
+    });
+
+    $('#opt-anim').addEventListener('change', function () { state.ui.anim = $('#opt-anim').checked; save(); });
+
+    var fsBtn = $('#btn-fs');
+    if (document.fullscreenEnabled) fsBtn.hidden = false;
+    fsBtn.addEventListener('click', function () {
+      var p = document.fullscreenElement ? document.exitFullscreen() : $('#stage').requestFullscreen();
+      if (p && p.catch) p.catch(function () { toast('這個畫面不支援全螢幕'); });
+    });
+    document.addEventListener('fullscreenchange', function () {
+      fsBtn.textContent = document.fullscreenElement ? '離開全螢幕' : '全螢幕';
+    });
+
+    $('#btn-copy').addEventListener('click', function () {
+      var text = announcementText();
+      var box = $('#copy-box');
+      box.value = text;
+      box.hidden = false;
+      function fallback() {
+        box.focus();
+        box.select();
+        toast('已選取公告文字，請按 Ctrl+C（手機長按）複製');
+      }
+      try {
+        var pr = navigator.clipboard && navigator.clipboard.writeText(text);
+        if (!pr) { fallback(); return; }
+        pr.then(function () { toast('已複製得獎公告，可以直接貼到貼文'); }, fallback);
+      } catch (e) { fallback(); }
+    });
+
+    $('#btn-csv').addEventListener('click', function () {
+      try {
+        var url = URL.createObjectURL(new Blob([resultCSV()], { type: 'text/csv;charset=utf-8' }));
+        var a = el('a', { href: url, download: '抽獎結果-' + dateStamp() + '.csv', hidden: true });
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+        toast('已下載 CSV 紀錄');
+      } catch (e) {
+        toast('這個瀏覽器無法下載檔案，請改用「複製得獎公告」');
+      }
+    });
+
+    twoStep($('#btn-reset'), '確定重新開始？', function () {
+      var n = state.winners.length;
+      state.winners = [];
+      state.ui.lastWinnerId = null;
+      addLog('reset', '重新開始抽獎，清除 ' + n + ' 筆抽出結果，名單和條件解除鎖定');
+      $('#copy-box').hidden = true;
+      save();
+      renderAll();
+      toast('已重新開始，名單和條件可以修改了');
+    });
+    twoStep($('#btn-wipe'), '確定清除全部？', function () {
+      var anim = state.ui.anim;
+      state = makeEmpty();
+      state.ui.anim = anim;
+      avClear();
+      pending = null;
+      $('#paste').value = '';
+      syncRuleInputs();
+      syncImportUI();
+      renderPrizeEditor(true);
+      $('#copy-box').hidden = true;
+      save();
+      renderAll();
+      toast('已清除全部資料');
+    });
+    $('#btn-tool-ok').addEventListener('click', function () {
+      state.ui.oldTool = null;
+      save();
+      renderToolBanner();
+    });
+    $('#btn-clear-sample').addEventListener('click', function () {
+      if (clearSampleIfNeeded()) {
+        save();
+        renderAll();
+        toast('範例已清除，從第 1 步貼上你的名單開始');
+        $('#paste').focus();
+      }
+    });
+  }
+
+  state = load();
+  syncRuleInputs();
+  $('#opt-anim').checked = !!state.ui.anim;
+  wire();
+  syncImportUI();
+  renderPrizeEditor(true);
+  renderAll();
+  $('#foot-ver').textContent = 'v' + COLLECTOR_VERSION;
+  avLoad().then(function () {
+    avGc();
+    if (avatars.size) renderAll();
+  });
+})();
+</script>
+</body>
+</html>
