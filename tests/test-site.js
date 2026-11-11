@@ -112,12 +112,12 @@ const sample = (name) => {
   check(await pasteInto(page, '#paste', fbJson), 'draw: pasting a collector result is intercepted');
   await page.waitForTimeout(150);
   const boxText = await page.$eval('#paste', t => t.value);
-  check(boxText.startsWith('【Facebook 抓取結果】22 則留言・21 位・20 張頭像') && boxText.length < 120, 'draw: text box shows a short summary (' + boxText.split('\n')[0] + ')');
-  check((await txt('#preview')).includes('偵測到 Facebook 抓取結果：22 則留言，21 位不重複，20 張頭像'), 'draw: preview recognises collector JSON');
+  check(boxText.split('\n')[0] === '【Facebook 抓取結果】22 則留言・21 位' && boxText.length < 120, 'draw: text box shows a short summary, without counting avatars (' + boxText.split('\n')[0] + ')');
+  check((await txt('#preview')).includes('偵測到 Facebook 抓取結果：22 則留言，21 位不重複') && !(await txt('#preview')).includes('頭像'), 'draw: preview recognises collector JSON');
   check(await page.locator('#preview .av img').count() >= 2, 'draw: preview shows avatars');
   await page.click('#btn-add');
   await page.waitForTimeout(150);
-  check((await txt('#toast')).includes('含 20 張頭像') && await page.$eval('#paste', t => t.value) === '', 'draw: import confirms 20 avatars and clears the box');
+  check((await txt('#toast')).includes('加入 Facebook 抓取的 22 則留言') && !(await txt('#toast')).includes('頭像') && await page.$eval('#paste', t => t.value) === '', 'draw: import confirms the comments and clears the box');
   check(await page.isHidden('#tool-banner') && await page.isHidden('#sample-banner'), 'draw: import replaces the sample data, no update banner');
   check(await page.locator('#people .person .av img').count() === 20 && await page.locator('#people .person .av-letter').count() === 1, 'draw: roster has 20 avatars + 1 letter');
   const xmLink = page.locator('#people .person .name a[href="https://www.facebook.com/xiaoming.chen"]');

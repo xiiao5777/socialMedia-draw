@@ -5,7 +5,7 @@
 (function () {
   'use strict';
   // Keep in step with COLLECTOR_VERSION in draw.html (build.js checks).
-  var VERSION = '1.8';
+  var VERSION = '1.9';
   // The 抽獎系統 page, filled in by build.js from the site address.
   var DRAW_URL = '__DRAW_URL__';
   var DRAW_ORIGIN = (DRAW_URL.match(/^https:\/\/[^/]+/) || [''])[0];
@@ -662,7 +662,7 @@
   }
 
   // ---------- expanding & scrolling ----------
-  var EXPAND_RE = /^(查看更多留言|查看之前的留言|查看更多評論|查看更多回覆|查看更多回复|查看更多评论|查看之前的评论|顯示更多回覆|顯示更多留言|显示更多回复|更多留言|更多回覆|載入更多|加载更多|View more comments|View previous comments|View more replies|Show more replies|Show additional replies|Show probable spam|Show replies|See more replies|Load more comments|Load more replies|顯示可能是垃圾|显示可能的垃圾)/i;
+  var EXPAND_RE = /^(查看更多留言|查看之前的留言|查看更多評論|查看更多回覆|查看更多回复|查看更多评论|查看之前的评论|顯示更多回覆|顯示更多留言|显示更多回复|更多留言|更多回覆|載入更多|加载更多|View more comments|View previous comments|View more replies|Show more replies|Show additional replies|Show probable spam|Show replies|See more replies|Load more comments|Load more replies|顯示其他回覆|显示其他回复|顯示可能(?:是|的)?垃圾|显示可能(?:是|的)?垃圾)/i;
   var REPLIES_RE = /^(查看全部\s*\d+\s*則回覆|查看\s*\d+\s*則回覆|\d+\s*則回覆|查看全部\s*\d+\s*条回复|查看\s*\d+\s*条回复|\d+\s*条回复|View all \d+ replies|View \d+ repl(y|ies)|\d+ repl(y|ies)$|See all \d+ replies)/i;
   var SEEMORE_RE = /^(查看更多|顯示更多|See more|展开|展開)$/i;
   var clicks = new WeakMap();
@@ -674,9 +674,10 @@
       var href = el.closest('a[href]');
       if (href && (href.getAttribute('href') || '#') !== '#') continue;
       var t = txt(el);
-      if (!t || t.length > 40) continue;
-      var ok = EXPAND_RE.test(t) || REPLIES_RE.test(t) ||
-        (platform === 'facebook' && SEEMORE_RE.test(t) && !!el.closest('[role="article"]'));
+      // X's 「Show additional replies, including those that may contain offensive content」 is long
+      if (!t || t.length > 90) continue;
+      var ok = EXPAND_RE.test(t) || (t.length <= 40 && (REPLIES_RE.test(t) ||
+        (platform === 'facebook' && SEEMORE_RE.test(t) && !!el.closest('[role="article"]'))));
       if (!ok || !visible(el)) continue;
       // The same button can stay on the page and load more each time; pace repeat clicks.
       var c = clicks.get(el) || { n: 0, t: 0 };
@@ -865,6 +866,9 @@
 
   var status = mk('div', { fontSize: '13px', color: C.muted });
   panel.appendChild(status);
+  // A finished run whose number differs from the post's for a known reason: say it is complete, and why.
+  var doneBox = mk('div', { display: 'none', fontSize: '12.5px', lineHeight: '1.55', color: C.ink, background: '#E3F4EA', border: '1px solid ' + C.ok, borderRadius: '8px', padding: '8px 10px' });
+  panel.appendChild(doneBox);
   var tip = mk('div', { fontSize: '12.5px', background: C.soft, color: C.ink, borderRadius: '8px', padding: '8px 10px', display: 'none', whiteSpace: 'pre-line' });
   panel.appendChild(tip);
   // A run that may have missed some (fewer than the post says, stopped, or out of time): 繼續抓.
@@ -1011,6 +1015,7 @@
     where.textContent = PLATFORM_LABEL[platform] + '・' + (k === 'comment' ? '等你回到貼文' : '等你打開名單');
     css(countRow, { display: 'none' });
     showOk('');
+    showDone('');
     showMore('');
     showNext(false);
     css(box, { display: 'none' });
@@ -1045,10 +1050,11 @@
     S.summary = res.summary;
     renderMode();
     css(countRow, { display: 'flex' });
-    setCount(res.n, res.e);
+    setCount(res.n, res.done ? null : res.e);
     setStatus(res.summary);
     setTip(res.tip);
     showOk('');
+    showDone(res.done);
     showMore(res === S.lastRes ? res.more : '');
     showNext(false);
     css(box, { display: 'none' });
@@ -1057,6 +1063,13 @@
     acts.push({ label: '複製結果', primary: !acts.length, copy: true, onClick: function () { copyText(res.text, markCopied); } });
     acts.push({ label: '重新抓取', primary: false, onClick: function () { choose(res.kind, true); } });
     setActions(acts);
+  }
+  function showDone(s) {
+    while (doneBox.firstChild) doneBox.removeChild(doneBox.firstChild);
+    css(doneBox, { display: s ? 'block' : 'none' });
+    if (!s) return;
+    doneBox.appendChild(mk('div', { fontWeight: '700', color: C.ok }, '✓ 抓完了，畫面上看得到的回覆都抓到了。'));
+    doneBox.appendChild(mk('div', null, s));
   }
   function showMore(s) {
     while (moreBox.firstChild) moreBox.removeChild(moreBox.firstChild);
@@ -1194,6 +1207,7 @@
     updateCount();
     setTip(S.notes.join('\n'));
     showOk('');
+    showDone('');
     showMore('');
     showNext(false);
     css(box, { display: 'none' });
@@ -1226,8 +1240,11 @@
       // As many as the post says: done, once two more rounds bring nothing new. Fewer: keep trying
       // a little longer before giving up. With the author's own replies on the page the post's number
       // may leave them out (replies to replies), so it cannot say the list is complete.
+      // On X and Threads the post's number counts direct replies only, while replies to replies show
+      // up too: reaching it says nothing, so those runs go on until the page has no more.
       var left = S.expect ? S.expect.n - got() : 0;
-      if (S.expect && S.expect.exact && left <= 0 && calm >= 2 && !S.skippedOwner.size) { S.stop = 'count'; break; }
+      var countEnds = !(S.kind === 'comment' && (platform === 'x' || platform === 'threads'));
+      if (S.expect && S.expect.exact && left <= 0 && calm >= 2 && !S.skippedOwner.size && countEnds) { S.stop = 'count'; break; }
       if (idle >= (left > 0 ? 12 : 7)) break;
       if (Date.now() - t0 > 8 * 60 * 1000) { S.stop = 'time'; break; }
     }
@@ -1310,12 +1327,23 @@
     var e = S.expect, own = got() - n, short = e ? e.n - got() : 0;
     var goOnText = '按「繼續抓」可以接著抓，已經抓到的會留著。';
     var more = S.stop === 'user' ? '已經停止。' : S.stop === 'time' ? '已經抓了 8 分鐘，先停一下。' : '';
+    var done = '';
     if (short > 0) {
-      more += '貼文上顯示' + (e.exact ? ' ' : '約 ') + e.n + { comment: ' 則留言', like: ' 個讚', share: ' 次分享' }[S.kind] + '，這次抓到 ' + n + (own ? '，加上略過的作者回覆 ' + own + ' 則' : '') + '。' +
-        (S.kind === 'share' ? '不公開的分享看不到，少一些是正常的。' : '差幾個是正常的（已刪除或看不到的）。') + '差很多的話，' + goOnText;
+      // Fewer than the post says, even with the author's own replies: what the others are, and what to do
+      more += '貼文上顯示' + (e.exact ? ' ' : '約 ') + e.n + { comment: ' 則留言', like: ' 個讚', share: ' 次分享' }[S.kind] + '，這次抓到 ' + n + (S.kind === 'comment' ? ' 則' : ' 位') +
+        (own ? '（另外略過作者自己的回覆 ' + own + ' 則）' : '') + '。' +
+        { comment: '少幾則是正常的：已刪除的、私人帳號的、封鎖你的人留的，或被網站收起來的留言，你在畫面上也看不到，沒辦法加進抽獎。',
+          like: '少幾個是正常的：帳號已停用或你看不到的人，不會出現在按讚名單裡。',
+          share: '不公開的分享看不到，少一些是正常的。' }[S.kind] + '少很多的話，' + goOnText;
     } else if (more) more += goOnText;
     else if (!e) more = '比貼文上的數量少？' + goOnText;
-    var res = { kind: S.kind, n: n, e: e, own: own, text: text, summary: summary, tip: tips.join('\n'), more: more };
+    else if (S.kind === 'comment' && n !== e.n && (platform === 'x' || (n < e.n && own))) {
+      // Complete, with a number that is not the post's: 「76 / 80」 would read as 4 missing
+      done = platform === 'x'
+        ? 'X 上顯示' + (e.exact ? ' ' : '約 ') + e.n + ' 則，是只算直接回覆這篇貼文的留言，作者自己直接回覆的也算在內；這裡還會抓到回覆在別人留言底下的，作者自己的則略過，所以數字不會剛好一樣，這是正常的。'
+        : '貼文上顯示' + (e.exact ? ' ' : '約 ') + e.n + ' 則，裡面也算了作者自己的回覆。作者不能抽自己的獎，這裡已經略過，所以比貼文上的少，這是正常的。';
+    }
+    var res = { kind: S.kind, n: n, e: e, own: own, text: text, summary: summary, tip: tips.join('\n'), more: more, done: done };
     S.results[S.kind] = res;
     S.lastRes = res;
     showResult(res);

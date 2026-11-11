@@ -156,7 +156,9 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   check(drawPage.url() === SITE + 'draw.html' && await drawPage.title() === '開始抽獎｜抽獎系統', 'FB: the draw page opens (' + drawPage.url() + ')');
   check(await pasteInto(drawPage, '#quick-paste', clip), 'FB: the copied result pastes into 送不過去的話 on the draw page');
   await drawPage.waitForTimeout(200);
-  check(await drawPage.$eval('#s-people', n => n.textContent) === '21' && (await drawPage.$eval('#toast', n => n.textContent)).includes('含 20 張頭像'), 'FB: 21 people and 20 avatars land in the draw page');
+  const dpToast = await drawPage.$eval('#toast', n => n.textContent);
+  check(await drawPage.$eval('#s-people', n => n.textContent) === '21' && dpToast.includes('加入 Facebook 抓取的 22 則留言') && !dpToast.includes('頭像') && await drawPage.locator('#people .person .av img').count() === 20,
+    'FB: 21 people and 20 avatars land in the draw page, which does not count the avatars (' + dpToast + ')');
   check(await drawPage.isHidden('#tool-banner'), 'FB: no update banner for the newest tool');
   await drawPage.close();
   await r.page.waitForTimeout(3200);
@@ -200,14 +202,16 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   // X post with virtualized replies, owner reply, parent tweet, "Show more replies"
   r = await runOn(browser, 'https://x.com/brand/status/111');
   const x = r.result;
-  check(x && x.kind === 'comment' && x.items.length === 33, 'X: 30 + 3 replies collected through virtualization (got ' + (x && x.items.length) + ')');
+  check(x && x.kind === 'comment' && x.items.length === 33, 'X: 30 replies through virtualization + 3 behind 「Show more replies」, the long 「Show additional replies, …」 and 「顯示可能是垃圾訊息的回覆」 (got ' + (x && x.items.length) + ')');
   check(x && !x.items.some(i => i.handle === '@brand' || i.handle === '@someone'), 'X: main post, parent post and owner reply skipped');
   const u0 = x && x.items.find(i => i.handle === '@user_0');
   check(u0 && u0.name === 'User 0' && u0.tags && u0.tags.join() === '@friend_0,@friend_1', 'X: name, handle and mention tags (' + JSON.stringify(u0) + ')');
   check(u0 && u0.url === 'https://x.com/user_0' && u0.link === 'https://x.com/user_0/status/1000', 'X: profile link and reply link');
   check(u0 && u0.time === '2026-11-10T11:00:00.000Z' && !u0.timeFrom && x.items.find(i => i.handle === '@user_3').time === '2026-11-10T14:00:00.000Z', 'X: each reply has its exact time (' + (u0 && u0.time) + ')');
   check(/略過貼文作者/.test(r.panelText), 'X: panel reports skipped owner replies');
-  check(await countLine(r.page) === '33/ 34 則留言' && !await hasGoOn(r.page), 'X: shows the post\'s "34 replies" as it is, 33 / 34 with the author\'s own reply skipped (' + await countLine(r.page) + ')');
+  // X's "34 replies" counts the author's own reply, which is skipped: complete, so no 「33 / 34」 that reads as one missing
+  check(await countLine(r.page) === '33則留言' && !await hasGoOn(r.page) && r.panelText.includes('✓ 抓完了，畫面上看得到的回覆都抓到了。X 上顯示 34 則，是只算直接回覆這篇貼文的留言'),
+    'X: complete with the author\'s own reply skipped: 33, and the panel says why X shows 34 (' + await countLine(r.page) + ')');
   const xav = (x && x.avatars) || {};
   check(Object.keys(xav).length === 33 && !xav['@brand'], 'X: 33 avatars, none for the owner (got ' + Object.keys(xav).length + ')');
   check(r.imgLog.some(l => l.cors && /user_0_bigger\.jpg$/.test(l.url)), 'X: asks for the sharper *_bigger avatar');
@@ -233,7 +237,8 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   check(t0i && t0i.url === 'https://www.threads.com/@th.user0' && t0i.link === 'https://www.threads.com/@th.user0/post/R0', 'Threads: profile link and reply link');
   check(t0i && t0i.time === '2026-11-10T08:30:00.000Z' && th.items.every(i => i.time && !i.timeFrom), 'Threads: each reply has its exact time (' + (t0i && t0i.time) + ')');
   check(th && !th.items.some(i => i.handle === '@brandtw'), 'Threads: main post and owner reply skipped');
-  check(await countLine(r.page) === '16/ 17 則留言' && !await hasGoOn(r.page), 'Threads: reads the number next to the reply icon, 16 / 17 with the author\'s own reply skipped (' + await countLine(r.page) + ')');
+  check(await countLine(r.page) === '16則留言' && !await hasGoOn(r.page) && r.panelText.includes('✓ 抓完了') && r.panelText.includes('貼文上顯示 17 則，裡面也算了作者自己的回覆。'),
+    'Threads: reads 17 next to the reply icon; 16 with the author\'s own reply skipped, said to be complete (' + await countLine(r.page) + ')');
   const tav = (th && th.avatars) || {};
   check(Object.keys(tav).length === 16 && await avatarMatches(r.page, tav['@th.user5'], 'https://scontent-tpe1-1.cdninstagram.com/v/t51.2885-19/th.user5_n.jpg'), 'Threads: 16 avatars, th.user5 correct');
   fs.writeFileSync(path.join(OUT, 'sample-threads.json'), r.raw);
@@ -276,7 +281,7 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   drawTab.on('pageerror', e => r.errors.push('draw: ' + e.message));
   await drawTab.waitForTimeout(300);
   let ft = await panel(r.page);
-  check(ft.includes('✓ 已送到抽獎系統：加入 4 則留言（含 3 張頭像）。') && /還要抓按讚或分享的人/.test(ft) && await btn(r.page, '✓ 已送出').count() === 1,
+  check(ft.includes('✓ 已送到抽獎系統：加入 4 則留言。') && !ft.includes('頭像') && /還要抓按讚或分享的人/.test(ft) && await btn(r.page, '✓ 已送出').count() === 1,
     'Send FB: 送到抽獎系統 adds the comments, the panel says so and offers 抓按讚 / 抓分享');
   const dtxt = (s) => drawTab.$eval(s, n => n.textContent.trim());
   check(drawTab.url() === SITE + 'draw.html?g=facebook' && await drawTab.title() === 'Facebook 抽獎｜抽獎系統' && await dtxt('#s-people') === '4' && await drawTab.locator('#batches .batch').count() === 1 && await drawTab.isHidden('#sample-banner'),
@@ -421,7 +426,8 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   r = await runOn(browser, 'https://www.facebook.com/brandpage/posts/pfbid0more');
   let mt = await panel(r.page);
   check(r.result && r.result.items.length === 8 && await countLine(r.page) === '8/ 12 則留言', 'More: ends at 8 / 12 (' + (r.result && r.result.items.length) + ')');
-  check(mt.includes('貼文上顯示 12 則留言，這次抓到 8。') && /差很多的話，按「繼續抓」可以接著抓/.test(mt) && await hasGoOn(r.page), 'More: says it got fewer than the post shows, with 繼續抓');
+  check(mt.includes('貼文上顯示 12 則留言，這次抓到 8 則。少幾則是正常的：已刪除的、私人帳號的、封鎖你的人留的') && /少很多的話，按「繼續抓」可以接著抓/.test(mt) && await hasGoOn(r.page) && !mt.includes('✓ 抓完了'),
+    'More: says it got fewer than the post shows, what the others may be, and offers 繼續抓');
   await r.page.locator('#giveaway-collector-host').screenshot({ path: path.join(OUT, 'shot-collector-short.png') });
   const [moreTab] = await Promise.all([r.ctx.waitForEvent('page'), sendNow(r.page)]);
   await moreTab.waitForTimeout(300);
