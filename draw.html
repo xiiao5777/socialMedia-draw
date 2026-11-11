@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700;900&display=swap">
 <style>
-/* Layout: two-column workbench. Left: the numbered setup steps (import, rules, prizes) and the roster. Right: the draw stage (a raffle ticket that gets a seal stamp) and the results. One column on phones. */
+/* Layout: two views under a tab bar that stays at the top. 準備: the numbered setup steps (import, rules, prizes) with the roster beside them, then a 去抽獎 bar. 抽獎: the draw stage (a raffle ticket that gets a seal stamp) and the results. One column on phones, with the roster right under the import step. */
 :root {
   --paper: #F2F4F7;
   --surface: #FFFFFF;
@@ -207,12 +207,81 @@ button { font: inherit; }
 .banner-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 a.btn { text-decoration: none; }
 
-/* Workbench */
-.workbench { display: grid; gap: 20px; align-items: start; }
-@media (min-width: 980px) {
-  .workbench { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+/* Views: 準備 (#setup) and 抽獎 (#draw), switched by the tab bar that stays at the top */
+.views-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  margin: -10px 0;
+  padding: 10px 0;
+  background: var(--paper);
 }
-.col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.views {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.view-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  padding: 6px 10px;
+  border-radius: 9px;
+  color: var(--muted);
+  text-align: center;
+  text-decoration: none;
+  line-height: 1.35;
+}
+.view-tab b { font-size: 16px; }
+.view-tab small { font-size: 12.5px; }
+.view-tab:hover { color: var(--ink); }
+.view-tab[aria-current="page"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-sm); }
+.view-tab[aria-current="page"] b { color: var(--accent-text); }
+@media (max-width: 520px) {
+  .vt-steps { display: none; }
+}
+.view, .setup-grid { display: grid; gap: 20px; align-items: start; }
+.view > *, .setup-grid > * { min-width: 0; }
+.setup-grid { grid-template-areas: "import" "people" "rules" "prizes"; }
+.area-import { grid-area: import; }
+.area-people { grid-area: people; }
+.area-rules { grid-area: rules; }
+.area-prizes { grid-area: prizes; }
+@media (min-width: 980px) {
+  /* The roster stays in sight beside steps 1–3, so a changed rule shows who still qualifies.
+     It sticks inside .setup-grid only, so it never slides over the 去抽獎 bar below. */
+  .setup-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas: "import people" "rules people" "prizes people";
+  }
+  .area-people { position: sticky; top: 92px; max-height: calc(100vh - 108px); }
+  .area-people .people { flex: 1 1 auto; min-height: 160px; max-height: none; }
+  .draw-grid { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
+}
+.next-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px 24px;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.next-copy { flex: 1 1 320px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.next-copy b { font-size: 17px; }
+.next-copy p:not(.warn-line) { color: var(--muted); }
+@media (max-width: 600px) {
+  .next-bar .btn { flex: 1 1 100%; }
+}
 .panel {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -249,6 +318,7 @@ a.btn { text-decoration: none; }
   background: var(--surface-2);
   font-size: 13.5px;
 }
+.lock-note a { color: var(--accent-text); font-weight: 500; }
 
 input[type="text"], input[type="number"], input[type="search"], textarea, select {
   font: inherit;
@@ -387,27 +457,54 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
 .rule { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
 .rule + .rule { border-top: 1px solid var(--line); }
 .rule > label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
-.rule input[type="checkbox"] { width: 18px; height: 18px; margin: 3px 0 0; accent-color: var(--accent); flex: none; }
+/* Drawn by hand, so a locked rule keeps its full colour: a ticked box stays red with a white tick. */
+.rule input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  border: 2px solid var(--muted);
+  border-radius: 5px;
+  background: var(--surface) center / 14px 14px no-repeat;
+  cursor: pointer;
+}
+.rule input[type="checkbox"]:checked {
+  border-color: var(--accent);
+  background-color: var(--accent);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.2 8.4l3 3 6.6-7' fill='none' stroke='%23fff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.rule input[type="checkbox"]:disabled { opacity: 1; cursor: default; }
 .rule b { display: block; font-weight: 500; }
 .rule small { display: block; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
 .rule-fixed { flex-direction: row; gap: 10px; align-items: flex-start; }
 .check-fixed {
   flex: none;
-  width: 18px;
-  height: 18px;
-  margin-top: 3px;
-  border-radius: 4px;
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  border-radius: 5px;
   background: var(--ok);
   color: var(--surface);
   display: grid;
   place-items: center;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
 }
-.rule-extra { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-left: 28px; font-size: 14px; }
+.rule-extra { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-left: 30px; font-size: 14px; }
 .rule-extra input[type="number"] { width: 76px; }
 .rule-extra input[type="text"] { flex: 1 1 150px; }
 .rule:has(> label input:not(:checked)) .rule-extra { opacity: .55; }
+/* Locked during a draw: what was typed stays readable, and rules that are not used step back. */
+.rules input:not([type="checkbox"]):disabled, .rules select:disabled, #r-exclude:disabled {
+  opacity: 1;
+  cursor: default;
+  background-color: var(--surface-2);
+  -webkit-text-fill-color: currentColor;
+}
+.is-locked .rule > label { cursor: default; }
+.is-locked .rule:has(> label input:not(:checked)) { opacity: .45; }
 
 /* Prizes */
 .prize-head, .prize-row {
@@ -453,7 +550,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
   list-style: none;
   margin: 0;
   padding: 0;
-  max-height: 460px;
+  max-height: min(460px, 60vh);
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -504,6 +601,15 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
   overflow: auto;
 }
 .stage:fullscreen .ticket-name { font-size: clamp(48px, 8vw, 120px); }
+.stage:fullscreen .rs-edit { display: none; }
+/* The rules in use, on the draw page, since the rules themselves are on the 準備 page */
+.rule-sum { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.rs-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.rs-label { color: var(--muted); letter-spacing: .06em; }
+.rs-edit { color: var(--accent-text); font-weight: 500; white-space: nowrap; }
+.rs-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.rs-chip { max-width: 100%; padding: 2px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); overflow-wrap: anywhere; }
+.rs-chip.fixed { border-color: transparent; background: var(--ok-soft); color: var(--ok); }
 .stage:fullscreen .ticket-body { min-height: 40vh; }
 .ticket {
   position: relative;
@@ -759,8 +865,11 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
   </header>
 
   <div class="banner" id="sample-banner" hidden>
-    <p><b>這是範例資料。</b>一篇有 23 位網友互動的貼文，條件和獎品都設定好了，可以直接在抽獎台按「抽出 1 位」試試看。</p>
-    <button class="btn" type="button" id="btn-clear-sample">清除範例，開始使用</button>
+    <p><b>這是範例資料。</b>一篇有 23 位網友互動的貼文，條件和獎品都設定好了，可以在「抽獎」頁按「抽出 1 位」試試看。</p>
+    <div class="banner-actions">
+      <a class="btn btn-primary" href="#draw" id="btn-try">試抽看看 →</a>
+      <button class="btn" type="button" id="btn-clear-sample">清除範例，開始使用</button>
+    </div>
   </div>
 
   <div class="banner banner-update" id="tool-banner" role="status" hidden>
@@ -771,128 +880,146 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     </div>
   </div>
 
-  <main class="workbench">
-    <div class="col">
-      <section class="panel" id="sec-import" data-lockable aria-labelledby="h-import">
-        <header class="sec-head">
-          <span class="step" aria-hidden="true">1</span>
-          <div>
-            <h2 id="h-import">匯入參加者</h2>
-            <p class="sub">分別貼上留言、按讚、分享的名單，同一個名字會自動合併成一位參加者。</p>
-          </div>
-        </header>
-        <p class="lock-note" hidden>抽獎已經開始，名單已鎖定。要修改請先在得獎名單按「重新開始抽獎」。</p>
-        <div class="seg" role="radiogroup" aria-label="名單類型" id="import-type">
-          <button type="button" role="radio" data-type="comment" aria-checked="true">留言者</button>
-          <button type="button" role="radio" data-type="like" aria-checked="false">按讚者</button>
-          <button type="button" role="radio" data-type="share" aria-checked="false">分享者</button>
-        </div>
-        <div class="callout">
-          <p>用「名單抓取工具」在貼文頁面按一下，就能把留言、按讚、分享名單複製下來，再貼到下面。</p>
-          <a href="./#install" target="_blank" rel="noopener">安裝抓取工具</a>
-        </div>
-        <div class="field">
-          <label class="field-label" for="paste" id="paste-label">貼上留言者名單</label>
-          <textarea id="paste" rows="6" spellcheck="false"></textarea>
-          <p class="hint" id="paste-hint"></p>
-        </div>
-        <div class="preview" id="preview" hidden></div>
-        <div class="row-actions">
-          <button class="btn btn-primary" type="button" id="btn-add">加入名單</button>
-          <button class="btn" type="button" id="btn-file">匯入 CSV 檔</button>
-          <input type="file" id="file" accept=".csv,.tsv,.txt,.json,text/csv,text/plain,application/json" hidden>
-        </div>
-        <p class="hint">CSV 請存成 UTF-8，第一列可以用這些欄位：名字、帳號、留言、類型（留言／按讚／分享）。</p>
-        <div class="batches" id="batches"></div>
-      </section>
+  <div class="views-bar">
+    <nav class="views" id="views" aria-label="抽獎步驟">
+      <a class="view-tab" href="#setup" data-view="setup"><b>準備</b><small><span class="vt-steps">第 1–3 步・</span>名單、條件、獎品</small></a>
+      <a class="view-tab" href="#draw" data-view="draw"><b>抽獎</b><small><span class="vt-steps">第 4 步・</span>抽獎台、得獎名單</small></a>
+    </nav>
+  </div>
 
-      <section class="panel" id="sec-rules" data-lockable aria-labelledby="h-rules">
-        <header class="sec-head">
-          <span class="step" aria-hidden="true">2</span>
-          <div>
-            <h2 id="h-rules">參加條件</h2>
-            <p class="sub">勾選的條件全部符合，才會拿到抽獎編號、進入抽獎池。</p>
-          </div>
-        </header>
-        <p class="lock-note" hidden>抽獎已經開始，條件已鎖定，確保每位得獎者都是用同一套規則抽出來的。</p>
-        <ul class="rules">
-          <li class="rule rule-fixed">
-            <span class="check-fixed" aria-hidden="true">✓</span>
-            <div><b>同一人多次留言只算一次</b><small>固定規則，每位參加者只有一個抽獎編號。</small></div>
-          </li>
-          <li class="rule">
-            <label><input type="checkbox" id="r-comment"><span><b>需要留言</b><small>至少留言一次</small></span></label>
-          </li>
-          <li class="rule">
-            <label><input type="checkbox" id="r-like"><span><b>需要按讚</b><small>出現在按讚者名單裡</small></span></label>
-          </li>
-          <li class="rule">
-            <label><input type="checkbox" id="r-share"><span><b>需要分享</b><small>出現在分享者名單裡</small></span></label>
-          </li>
-          <li class="rule">
-            <label><input type="checkbox" id="r-tag"><span><b>需要標記朋友</b><small>用留言裡的「@名字」計算，標記不同的人才算</small></span></label>
-            <div class="rule-extra">
-              <label for="r-tag-n">至少標記</label>
-              <input type="number" id="r-tag-n" min="1" max="20" inputmode="numeric">
-              <span>位</span>
+  <main class="views-main">
+    <div class="view" id="view-setup" data-view="setup">
+      <div class="setup-grid">
+        <section class="panel area-import" id="sec-import" data-lockable aria-labelledby="h-import">
+          <header class="sec-head">
+            <span class="step" aria-hidden="true">1</span>
+            <div>
+              <h2 id="h-import">匯入參加者</h2>
+              <p class="sub">分別貼上留言、按讚、分享的名單，同一個名字會自動合併成一位參加者。</p>
             </div>
-          </li>
-          <li class="rule">
-            <label><input type="checkbox" id="r-kw"><span><b>留言要有關鍵字</b><small>多個關鍵字用逗號隔開，不分大小寫</small></span></label>
-            <div class="rule-extra">
-              <label class="sr-only" for="r-kw-text">關鍵字</label>
-              <input type="text" id="r-kw-text" placeholder="例如：我要抽">
-              <label class="sr-only" for="r-kw-mode">比對方式</label>
-              <select id="r-kw-mode">
-                <option value="any">符合任一個</option>
-                <option value="all">全部都要有</option>
-              </select>
+          </header>
+          <p class="lock-note" hidden>抽獎已經開始，名單已鎖定。要修改的話，到「<a href="#draw">抽獎</a>」頁在得獎名單下面按「重新開始抽獎」。</p>
+          <div class="seg" role="radiogroup" aria-label="名單類型" id="import-type">
+            <button type="button" role="radio" data-type="comment" aria-checked="true">留言者</button>
+            <button type="button" role="radio" data-type="like" aria-checked="false">按讚者</button>
+            <button type="button" role="radio" data-type="share" aria-checked="false">分享者</button>
+          </div>
+          <div class="callout">
+            <p>用「名單抓取工具」在貼文頁面按一下，就能把留言、按讚、分享名單複製下來，再貼到下面。</p>
+            <a href="./#install" target="_blank" rel="noopener">安裝抓取工具</a>
+          </div>
+          <div class="field">
+            <label class="field-label" for="paste" id="paste-label">貼上留言者名單</label>
+            <textarea id="paste" rows="6" spellcheck="false"></textarea>
+            <p class="hint" id="paste-hint"></p>
+          </div>
+          <div class="preview" id="preview" hidden></div>
+          <div class="row-actions">
+            <button class="btn btn-primary" type="button" id="btn-add">加入名單</button>
+            <button class="btn" type="button" id="btn-file">匯入 CSV 檔</button>
+            <input type="file" id="file" accept=".csv,.tsv,.txt,.json,text/csv,text/plain,application/json" hidden>
+          </div>
+          <p class="hint">CSV 請存成 UTF-8，第一列可以用這些欄位：名字、帳號、留言、類型（留言／按讚／分享）。</p>
+          <div class="batches" id="batches"></div>
+        </section>
+
+        <section class="panel area-people" id="sec-people" aria-labelledby="h-people">
+          <header class="sec-head">
+            <div>
+              <h2 id="h-people">參加者名單</h2>
+              <p class="sub">抽獎編號只發給符合資格的人，看不符合的原因可以幫你檢查條件。</p>
             </div>
-          </li>
-        </ul>
-        <div class="field">
-          <label class="field-label" for="r-exclude">排除名單</label>
-          <textarea id="r-exclude" rows="2" placeholder="不參加抽獎的人，例如粉專小編、工作人員。每行一個名字。"></textarea>
-        </div>
-      </section>
+          </header>
+          <div class="people-tools">
+            <div class="chips" role="radiogroup" aria-label="篩選參加者" id="people-filter">
+              <button type="button" role="radio" data-f="all" aria-checked="true">全部<span class="n" id="f-all">0</span></button>
+              <button type="button" role="radio" data-f="ok" aria-checked="false">符合<span class="n" id="f-ok">0</span></button>
+              <button type="button" role="radio" data-f="no" aria-checked="false">不符合<span class="n" id="f-no">0</span></button>
+            </div>
+            <input type="search" id="people-q" placeholder="搜尋名字" aria-label="搜尋名字">
+          </div>
+          <ul class="people" id="people"></ul>
+          <p class="hint" id="people-more" hidden></p>
+        </section>
 
-      <section class="panel" id="sec-prizes" aria-labelledby="h-prizes">
-        <header class="sec-head">
-          <span class="step" aria-hidden="true">3</span>
-          <div>
-            <h2 id="h-prizes">獎品</h2>
-            <p class="sub">由上到下是預設的抽獎順序，抽獎時也可以隨時切換要抽哪一個。</p>
+        <section class="panel area-rules" id="sec-rules" data-lockable aria-labelledby="h-rules">
+          <header class="sec-head">
+            <span class="step" aria-hidden="true">2</span>
+            <div>
+              <h2 id="h-rules">參加條件</h2>
+              <p class="sub">勾選的條件全部符合，才會拿到抽獎編號、進入抽獎池。</p>
+            </div>
+          </header>
+          <p class="lock-note" hidden>抽獎已經開始，條件已鎖定，<b>打勾的就是這次用的條件</b>，確保每位得獎者都是用同一套規則抽出來的。要修改的話，到「<a href="#draw">抽獎</a>」頁在得獎名單下面按「重新開始抽獎」。</p>
+          <ul class="rules">
+            <li class="rule rule-fixed">
+              <span class="check-fixed" aria-hidden="true">✓</span>
+              <div><b>同一人多次留言只算一次</b><small>固定規則，每位參加者只有一個抽獎編號。</small></div>
+            </li>
+            <li class="rule">
+              <label><input type="checkbox" id="r-comment"><span><b>需要留言</b><small>至少留言一次</small></span></label>
+            </li>
+            <li class="rule">
+              <label><input type="checkbox" id="r-like"><span><b>需要按讚</b><small>出現在按讚者名單裡</small></span></label>
+            </li>
+            <li class="rule">
+              <label><input type="checkbox" id="r-share"><span><b>需要分享</b><small>出現在分享者名單裡</small></span></label>
+            </li>
+            <li class="rule">
+              <label><input type="checkbox" id="r-tag"><span><b>需要標記朋友</b><small>用留言裡的「@名字」計算，標記不同的人才算</small></span></label>
+              <div class="rule-extra">
+                <label for="r-tag-n">至少標記</label>
+                <input type="number" id="r-tag-n" min="1" max="20" inputmode="numeric">
+                <span>位</span>
+              </div>
+            </li>
+            <li class="rule">
+              <label><input type="checkbox" id="r-kw"><span><b>留言要有關鍵字</b><small>多個關鍵字用逗號隔開，不分大小寫</small></span></label>
+              <div class="rule-extra">
+                <label class="sr-only" for="r-kw-text">關鍵字</label>
+                <input type="text" id="r-kw-text" placeholder="例如：我要抽">
+                <label class="sr-only" for="r-kw-mode">比對方式</label>
+                <select id="r-kw-mode">
+                  <option value="any">符合任一個</option>
+                  <option value="all">全部都要有</option>
+                </select>
+              </div>
+            </li>
+          </ul>
+          <div class="field">
+            <label class="field-label" for="r-exclude">排除名單</label>
+            <textarea id="r-exclude" rows="2" placeholder="不參加抽獎的人，例如粉專小編、工作人員。每行一個名字。"></textarea>
           </div>
-        </header>
-        <div class="prize-head" aria-hidden="true"><span>獎項名稱</span><span>名額</span><span></span></div>
-        <ol class="prize-list" id="prize-list"></ol>
-        <div class="row-actions">
-          <button class="btn" type="button" id="btn-add-prize">新增獎品</button>
-          <p class="hint" id="prize-total"></p>
-        </div>
-      </section>
+        </section>
 
-      <section class="panel" id="sec-people" aria-labelledby="h-people">
-        <header class="sec-head">
-          <div>
-            <h2 id="h-people">參加者名單</h2>
-            <p class="sub">抽獎編號只發給符合資格的人，看不符合的原因可以幫你檢查條件。</p>
+        <section class="panel area-prizes" id="sec-prizes" aria-labelledby="h-prizes">
+          <header class="sec-head">
+            <span class="step" aria-hidden="true">3</span>
+            <div>
+              <h2 id="h-prizes">獎品</h2>
+              <p class="sub">由上到下是預設的抽獎順序，抽獎時也可以隨時切換要抽哪一個。</p>
+            </div>
+          </header>
+          <div class="prize-head" aria-hidden="true"><span>獎項名稱</span><span>名額</span><span></span></div>
+          <ol class="prize-list" id="prize-list"></ol>
+          <div class="row-actions">
+            <button class="btn" type="button" id="btn-add-prize">新增獎品</button>
+            <p class="hint" id="prize-total"></p>
           </div>
-        </header>
-        <div class="people-tools">
-          <div class="chips" role="radiogroup" aria-label="篩選參加者" id="people-filter">
-            <button type="button" role="radio" data-f="all" aria-checked="true">全部<span class="n" id="f-all">0</span></button>
-            <button type="button" role="radio" data-f="ok" aria-checked="false">符合<span class="n" id="f-ok">0</span></button>
-            <button type="button" role="radio" data-f="no" aria-checked="false">不符合<span class="n" id="f-no">0</span></button>
-          </div>
-          <input type="search" id="people-q" placeholder="搜尋名字" aria-label="搜尋名字">
+        </section>
+      </div>
+
+      <div class="next-bar" id="next-bar">
+        <div class="next-copy">
+          <b id="next-title">準備好了嗎？</b>
+          <p id="next-text"></p>
+          <p class="warn-line" id="next-warn" hidden></p>
         </div>
-        <ul class="people" id="people"></ul>
-        <p class="hint" id="people-more" hidden></p>
-      </section>
+        <a class="btn btn-primary btn-lg" href="#draw" id="btn-go-draw">下一步：去抽獎 →</a>
+      </div>
     </div>
 
-    <div class="col">
+    <div class="view draw-grid" id="view-draw" data-view="draw" hidden>
       <section class="stage" id="stage" aria-labelledby="h-stage">
         <header class="sec-head">
           <span class="step" aria-hidden="true">4</span>
@@ -901,6 +1028,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
             <p class="sub" id="pool-line"></p>
           </div>
         </header>
+        <div class="rule-sum" id="rule-sum"></div>
         <div class="ticket" id="ticket" data-mode="idle">
           <div class="ticket-top"><span id="t-prize"></span><span class="ticket-no" id="t-no"></span></div>
           <div class="ticket-body">
@@ -1522,7 +1650,8 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     state.ui.selectedPrize = p ? p.id : null;
     return p;
   }
-  function rulesSummary() {
+  // The rules in use, in short words, for the log and the draw page.
+  function ruleParts() {
     var R = state.rules, parts = [];
     if (R.needComment) parts.push('需留言');
     if (R.needLike) parts.push('需按讚');
@@ -1532,9 +1661,9 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     if (R.needKeyword && kws.length) parts.push('留言含「' + kws.join('」' + (R.keywordMode === 'all' ? '和「' : '或「')) + '」');
     var ex = splitList(R.exclude).length;
     if (ex) parts.push('排除 ' + ex + ' 人');
-    parts.push('同一人只算一次');
-    return parts.join('、');
+    return parts;
   }
+  function rulesSummary() { return ruleParts().concat('同一人只算一次').join('、'); }
 
   // ---------- UI helpers ----------
   var toastTimer = null;
@@ -1584,10 +1713,81 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     renderBatches();
     renderPeople(ev);
     renderPrizeEditor(false);
+    renderNext(ev);
+    renderRuleSum();
     renderStage(ev);
     renderWinners();
     renderLog();
     applyLock();
+  }
+
+  // ---------- Views: 準備 (#setup) and 抽獎 (#draw) ----------
+  // The address says which view is open, so the browser's back button goes back to the other one.
+  // Without one, a giveaway that has started opens on 抽獎 and a new one on 準備.
+  var shownView = null;
+  function currentView() {
+    var h = location.hash.slice(1);
+    if (h === 'setup' || h === 'draw') return h;
+    return state.winners.length ? 'draw' : 'setup';
+  }
+  function showView(scroll) {
+    var v = currentView();
+    $$('.view').forEach(function (n) { n.hidden = n.dataset.view !== v; });
+    $$('.view-tab').forEach(function (a) {
+      if (a.dataset.view === v) a.setAttribute('aria-current', 'page');
+      else a.removeAttribute('aria-current');
+    });
+    $('#btn-try').hidden = v !== 'setup';
+    // Scrolled down when switching: start the other view at its top, right under the tab bar.
+    // 'top' always does that, so a phone shows the 抽出 1 位 button after 試抽看看.
+    if (scroll && shownView && (shownView !== v || scroll === 'top')) {
+      var bar = $('.views-bar').offsetHeight;
+      var top = $('.views-main').getBoundingClientRect().top;
+      if (top < bar || scroll === 'top') window.scrollTo(0, window.scrollY + top - bar - 10);
+    }
+    shownView = v;
+  }
+  function goView(v, scroll) {
+    if (location.hash !== '#' + v) location.hash = v;
+    showView(scroll || true);
+  }
+
+  // The 去抽獎 bar at the end of 準備: a summary of what has been set up.
+  function renderNext(ev) {
+    var started = state.winners.length > 0;
+    var slots = totalQty();
+    var text, warn = '';
+    if (started) {
+      text = '已抽出 ' + state.winners.filter(function (w) { return !w.void; }).length + ' / ' + slots + ' 名，名單和條件已鎖定。';
+    } else if (!ev.people.length) {
+      text = '還沒有參加者，先在第 1 步匯入名單。';
+    } else if (!state.prizes.length) {
+      text = '還沒有獎品，先在第 3 步新增。';
+    } else {
+      text = '參加者 ' + ev.people.length + ' 位，符合資格 ' + ev.eligibleCount + ' 位；' + state.prizes.length + ' 個獎項，共 ' + slots + ' 個名額。';
+      if (ev.eligibleCount === 0) warn = '目前沒有人符合條件，請檢查名單，或放寬第 2 步的條件。';
+      else if (ev.eligibleCount < slots) warn = '符合資格的只有 ' + ev.eligibleCount + ' 位，比 ' + slots + ' 個名額少，有些獎項會抽不滿。';
+    }
+    $('#next-title').textContent = started ? '抽獎已經開始' : '準備好了嗎？';
+    $('#next-text').textContent = text;
+    $('#next-warn').textContent = warn;
+    $('#next-warn').hidden = !warn;
+    $('#btn-go-draw').textContent = started ? '回到抽獎台 →' : '下一步：去抽獎 →';
+  }
+
+  // The rules in use, shown on the draw page.
+  function renderRuleSum() {
+    var parts = ruleParts();
+    $('#rule-sum').replaceChildren(
+      el('div', { class: 'rs-head' },
+        el('span', { class: 'rs-label' }, '參加條件'),
+        el('a', { class: 'rs-edit', href: '#setup' }, state.winners.length ? '查看條件' : '修改條件')
+      ),
+      el('div', { class: 'rs-chips' },
+        (parts.length ? parts : ['沒有勾選其他條件']).map(function (t) { return el('span', { class: 'rs-chip' }, t); }),
+        el('span', { class: 'rs-chip fixed' }, '同一人只算一次')
+      )
+    );
   }
 
   function renderStats(ev) {
@@ -1795,13 +1995,13 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     var totalRem = state.prizes.reduce(function (a, p) { return a + remainingOf(p); }, 0);
     var allDone = state.prizes.length > 0 && totalRem === 0;
 
-    $('#pool-line').textContent = ev.people.length
-      ? '符合資格 ' + ev.eligibleCount + ' 位，抽獎池還有 ' + pool.length + ' 位'
-      : '先在第 1 步匯入參加者名單';
+    var line = $('#pool-line');
+    if (ev.people.length) line.textContent = '符合資格 ' + ev.eligibleCount + ' 位，抽獎池還有 ' + pool.length + ' 位';
+    else line.replaceChildren('還沒有參加者，', el('a', { href: '#setup' }, '先到「準備」頁匯入名單'));
     renderChips(cur);
 
     var warn = '';
-    if (ev.people.length && ev.eligibleCount === 0) warn = '目前沒有人符合條件，請檢查名單，或放寬第 2 步的條件。';
+    if (ev.people.length && ev.eligibleCount === 0) warn = '目前沒有人符合條件，請到「準備」頁檢查名單，或放寬第 2 步的條件。';
     else if (!allDone && ev.eligibleCount > 0 && pool.length < totalRem) warn = '抽獎池只剩 ' + pool.length + ' 位，比剩下的 ' + totalRem + ' 個名額少，有些獎項會抽不滿。';
     $('#pool-warn').textContent = warn;
     $('#pool-warn').hidden = !warn;
@@ -1832,8 +2032,8 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
       return;
     }
     var msg;
-    if (!state.prizes.length) msg = '先在第 3 步新增獎品';
-    else if (!ev.people.length) msg = '先在第 1 步匯入參加者名單';
+    if (!state.prizes.length) msg = '先到「準備」頁新增獎品';
+    else if (!ev.people.length) msg = '先到「準備」頁匯入參加者名單';
     else if (ev.eligibleCount === 0) msg = '目前沒有人符合條件';
     else if (allDone) msg = '全部獎項都抽完了';
     else if (!pool.length) msg = '抽獎池已經沒有人了';
@@ -1903,6 +2103,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
 
   function applyLock() {
     var locked = state.winners.length > 0 || busy;
+    $$('[data-lockable]').forEach(function (n) { n.classList.toggle('is-locked', locked); });
     $$('[data-lockable] input, [data-lockable] textarea, [data-lockable] select, [data-lockable] button').forEach(function (n) { n.disabled = locked; });
     $$('.lock-note').forEach(function (n) { n.hidden = !state.winners.length; });
     $('#btn-add-prize').disabled = busy;
@@ -2272,7 +2473,8 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
       $('#copy-box').hidden = true;
       save();
       renderAll();
-      toast('已清除全部資料');
+      goView('setup');
+      toast('已清除全部資料，從第 1 步匯入新的名單');
     });
     $('#btn-tool-ok').addEventListener('click', function () {
       state.ui.oldTool = null;
@@ -2283,10 +2485,16 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
       if (clearSampleIfNeeded()) {
         save();
         renderAll();
+        goView('setup');
         toast('範例已清除，從第 1 步貼上你的名單開始');
         $('#paste').focus();
       }
     });
+    $('#btn-try').addEventListener('click', function (e) {
+      e.preventDefault();
+      goView('draw', 'top');
+    });
+    window.addEventListener('hashchange', function () { showView(true); });
   }
 
   state = load();
@@ -2296,6 +2504,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
   syncImportUI();
   renderPrizeEditor(true);
   renderAll();
+  showView(false);
   $('#foot-ver').textContent = 'v' + COLLECTOR_VERSION;
   avLoad().then(function () {
     avGc();

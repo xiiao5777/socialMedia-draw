@@ -1,4 +1,5 @@
-// The draw page with its built-in sample giveaway: rules, drawing, voiding, CSV, reset, own lists.
+// The draw page with its built-in sample giveaway: the 準備 / 抽獎 views, rules, drawing, voiding,
+// locked rules, CSV, reset, own lists.
 const fs = require('fs');
 const path = require('path');
 const { SITE, OUT, launch, serveSite, check, done } = require('./helpers.js');
@@ -22,7 +23,23 @@ const url = SITE + 'draw.html';
   check(await txt('#s-people') === '23', 'sample people = 23 (got ' + await txt('#s-people') + ')');
   check(await txt('#s-eligible') === '14', 'sample eligible = 14 (got ' + await txt('#s-eligible') + ')');
   check(await page.isVisible('#sample-banner'), 'sample banner visible');
-  check(await page.isVisible('#btn-csv'), 'CSV button shown');
+
+  // Two views: a giveaway that has not started opens on 準備, with the roster beside the import step
+  const view = () => page.$eval('.view-tab[aria-current="page"]', a => a.dataset.view);
+  check(await view() === 'setup' && await page.isVisible('#sec-rules') && await page.isHidden('#stage'), 'opens on 準備 (setup view) before the draw starts');
+  const pos = await page.evaluate(() => Object.fromEntries(['#sec-import', '#sec-people', '#sec-rules'].map(s => {
+    const r = document.querySelector(s).getBoundingClientRect();
+    return [s.slice(5), [Math.round(r.left), Math.round(r.top)]];
+  })));
+  check(pos.people[1] === pos.import[1] && pos.people[0] > pos.import[0] && pos.rules[1] > pos.import[1], 'roster sits beside step 1 on wide screens ' + JSON.stringify(pos));
+  check((await txt('#next-text')) === '參加者 23 位，符合資格 14 位；3 個獎項，共 6 個名額。' && await page.isHidden('#next-warn'), '去抽獎 bar sums up the setup');
+  await page.click('#btn-go-draw');
+  await page.waitForTimeout(150);
+  const under = await page.evaluate(() => ({ bar: Math.round(document.querySelector('.views-bar').getBoundingClientRect().bottom), stage: Math.round(document.getElementById('stage').getBoundingClientRect().top) }));
+  check(await view() === 'draw' && page.url().endsWith('#draw') && await page.isHidden('#sec-rules') && under.stage >= under.bar && under.stage < 400, '下一步：去抽獎 opens the 抽獎 view right under the tab bar ' + JSON.stringify(under));
+  const sum = await page.$$eval('#rule-sum .rs-chip', ns => ns.map(n => n.textContent));
+  check(sum.join() === '需留言,需按讚,需標記 2 位,留言含「我要抽」,排除 1 人,同一人只算一次' && (await txt('#rule-sum .rs-edit')) === '修改條件', 'the 抽獎 view lists the rules in use ' + JSON.stringify(sum));
+  check(await page.isVisible('#btn-csv') && await page.isHidden('#btn-try'), 'CSV button shown, 試抽看看 hidden on the 抽獎 view');
 
   // Ineligible reasons are shown
   const reasons = await page.$$eval('#people .reasons', ns => ns.map(n => n.textContent));
@@ -42,6 +59,23 @@ const url = SITE + 'draw.html';
   check(await page.isDisabled('#paste'), 'import locked after drawing starts');
   check(await page.isDisabled('#r-like'), 'rules locked after drawing starts');
   await page.screenshot({ path: path.join(OUT, 'shot-draw-desktop.png'), fullPage: true });
+
+  // Locked rules stay readable: a ticked box keeps its colour, rules that are not used step back
+  await page.click('.view-tab[data-view="setup"]');
+  await page.waitForTimeout(150);
+  const lk = await page.evaluate(() => {
+    const cs = s => getComputedStyle(document.querySelector(s));
+    const row = s => getComputedStyle(document.querySelector(s).closest('.rule')).opacity;
+    const note = document.querySelector('#sec-rules .lock-note');
+    return { note: note.hidden ? '' : note.textContent, box: [cs('#r-like').opacity, cs('#r-like').backgroundColor], used: row('#r-like'), unused: row('#r-share'), kw: [cs('#r-kw-text').opacity, cs('#r-kw-text').color] };
+  });
+  check(lk.note.includes('打勾的就是這次用的條件') && lk.box.join() === '1,rgb(198, 43, 43)' && lk.used === '1' && lk.unused === '0.45' && lk.kw.join() === '1,rgb(26, 32, 48)', 'locked rules stay readable ' + JSON.stringify(lk));
+  check((await txt('#next-text')).startsWith('已抽出 1 / 6 名') && (await txt('#btn-go-draw')) === '回到抽獎台 →', '去抽獎 bar says the draw has started');
+  await page.locator('#sec-rules').screenshot({ path: path.join(OUT, 'shot-draw-rules-locked.png') });
+  await page.goBack();
+  await page.waitForTimeout(150);
+  check(await view() === 'draw' && await page.isVisible('#stage'), 'the back button returns to the 抽獎 view');
+  check((await txt('#rule-sum .rs-edit')) === '查看條件', 'rule summary offers 查看條件 once locked');
 
   // Void the first winner (two-step)
   const voidBtn = page.locator('#winners .wrow button').first();
@@ -110,6 +144,7 @@ const url = SITE + 'draw.html';
   await page.waitForTimeout(100);
   check(await txt('#s-people') === '0', 'sample cleared');
   check(await page.isHidden('#sample-banner'), 'banner hidden after clearing');
+  check(await view() === 'setup' && await page.$eval('#paste', n => n === document.activeElement), 'clearing the sample goes to 準備 with the paste box ready');
   await page.fill('#paste', 'Alice | hi @bob @carl\n2. Bob | 我要抽\nalice | again\n\n');
   await page.waitForTimeout(250);
   check((await txt('#preview')).includes('讀到 3 筆留言，2 位不重複'), 'preview counts unique names');
@@ -143,7 +178,11 @@ const url = SITE + 'draw.html';
   await page.fill('#r-exclude', 'eve');
   await page.waitForTimeout(100);
   check(await txt('#s-eligible') === '0', 'exclusion is case-insensitive');
-  check(await page.isVisible('#pool-warn'), 'warning shown when nobody qualifies');
+  check(await page.isVisible('#next-warn') && (await txt('#next-warn')).includes('目前沒有人符合條件'), 'the 去抽獎 bar warns when nobody qualifies');
+  await page.click('.view-tab[data-view="draw"]');
+  await page.waitForTimeout(150);
+  check(await page.isVisible('#pool-warn'), 'the draw stage warns too');
+  await page.click('.view-tab[data-view="setup"]');
 
   // Prize editor
   await page.click('#btn-add-prize');
@@ -157,6 +196,13 @@ const url = SITE + 'draw.html';
   p2.on('pageerror', e => errors.push('m pageerror: ' + e.message));
   await p2.goto(url);
   await p2.waitForTimeout(300);
+  const order = await p2.evaluate(() => ['#sec-import', '#sec-people', '#sec-rules', '#sec-prizes', '#next-bar'].map(s => Math.round(document.querySelector(s).getBoundingClientRect().top)));
+  check(order.every((y, i) => i === 0 || y > order[i - 1]), 'phones: import, roster, rules, prizes, 去抽獎 from top to bottom ' + JSON.stringify(order));
+  await p2.screenshot({ path: path.join(OUT, 'shot-draw-mobile-dark-setup.png'), fullPage: true });
+  await p2.click('#btn-try');
+  await p2.waitForTimeout(200);
+  const btn = await p2.$eval('#btn-draw', n => { const r = n.getBoundingClientRect(); return [Math.round(r.top), Math.round(r.bottom)]; });
+  check(p2.url().endsWith('#draw') && btn[0] > 0 && btn[1] <= 844, 'phones: 試抽看看 opens 抽獎 with the 抽出 1 位 button on screen ' + JSON.stringify(btn));
   await p2.click('#btn-draw');
   await p2.waitForTimeout(800);
   check(await p2.$eval('#ticket', n => n.dataset.mode) === 'rolling', 'animated draw rolls names');

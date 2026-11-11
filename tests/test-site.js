@@ -141,6 +141,7 @@ const sample = (name) => {
   await page.click('#btn-add');
   await page.waitForTimeout(150);
   check(await txt('#s-people') === String(22 + 33) && await page.isHidden('#tool-banner'), 'draw: X replies added, newest-tool result clears the banner');
+  await page.click('.view-tab[data-view="draw"]');
   await page.click('#btn-draw');
   await page.waitForFunction(() => document.getElementById('ticket').dataset.mode === 'won', null, { timeout: 8000 });
   const tAv = await page.$eval('#t-av', a => ({ hidden: a.hidden, src: (a.querySelector('img') || {}).src || '' }));
@@ -175,6 +176,7 @@ const sample = (name) => {
   watch(other, 'other');
   await other.goto(SITE + 'draw.html');
   await other.waitForTimeout(300);
+  await page.click('.view-tab[data-view="setup"]');
   await page.click('#btn-add-prize');
   await page.waitForTimeout(500);
   check(await other.locator('#prize-list .prize-row').count() === 2, 'tabs: a prize added in one tab appears in the other');
@@ -190,8 +192,10 @@ const sample = (name) => {
   await other.close();
 
   // A crafted result cannot sneak in script links or non-image data
+  await page.click('.view-tab[data-view="draw"]');
   await page.click('#btn-wipe'); await page.click('#btn-wipe');
   await page.waitForTimeout(200);
+  check(page.url().endsWith('#setup') && await page.isVisible('#paste'), 'draw: 清除全部資料 goes back to 準備');
   const evil = { giveaway: 'list', v: 1, tool: VER, platform: 'x', kind: 'comment', page: 'https://x.com/a/status/1', at: '2026-11-11T05:00:00Z',
     items: [{ name: 'Evil', handle: '@evil', text: '我要抽 @a @b', url: 'javascript:alert(1)', link: 'https://evil.example/x' }],
     avatars: { '@evil': 'data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==' } };
@@ -284,7 +288,10 @@ const sample = (name) => {
   await pm.screenshot({ path: path.join(OUT, 'shot-home-mobile-dark.png'), fullPage: true });
   await pm.goto(SITE + 'draw.html');
   await pm.waitForTimeout(300);
-  check(await pm.evaluate(() => document.documentElement.scrollWidth - innerWidth) <= 0, 'draw: no horizontal overflow on phones');
+  check(await pm.evaluate(() => document.documentElement.scrollWidth - innerWidth) <= 0, 'draw: no horizontal overflow on phones (準備)');
+  await pm.click('.view-tab[data-view="draw"]');
+  await pm.waitForTimeout(150);
+  check(await pm.isVisible('#stage') && await pm.evaluate(() => document.documentElement.scrollWidth - innerWidth) <= 0, 'draw: no horizontal overflow on phones (抽獎)');
   await ctxM.close();
   const ctxR = await browser.newContext({ viewport: { width: 1100, height: 900 }, reducedMotion: 'reduce' });
   await serveSite(ctxR);
