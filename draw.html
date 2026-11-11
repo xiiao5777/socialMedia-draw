@@ -834,6 +834,17 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
   font-size: 14px;
   box-shadow: var(--shadow);
 }
+/* Covers the page while a big giveaway is read back from IndexedDB (usually a fraction of a second) */
+.loading-cover {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  background: var(--paper);
+  color: var(--muted);
+  font-size: 15px;
+}
 /* Confirm dialog: asks before anything is removed (清空名單, 移除, 作廢, 重新開始抽獎, 清除全部資料).
    Esc, 取消 or a click on the dimmed page around it cancels. */
 .confirm {
@@ -906,6 +917,10 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     </div>
   </div>
 
+  <div class="banner banner-update" id="save-banner" role="alert" hidden>
+    <p><b>這次的資料存不下來。</b>可能是名單太大，或瀏覽器不讓網頁存資料（例如封鎖了網站資料）。重新整理或關掉這個分頁，名單和抽獎結果就會不見：請在這個分頁內抽完，並按「下載 CSV 紀錄」保存。</p>
+  </div>
+
   <div class="banner banner-update" id="tool-banner" role="status" hidden>
     <p><b id="tool-banner-title"></b><span id="tool-banner-text"></span></p>
     <div class="banner-actions">
@@ -954,7 +969,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
             <button class="btn" type="button" id="btn-file">匯入 CSV 檔</button>
             <input type="file" id="file" accept=".csv,.tsv,.txt,.json,text/csv,text/plain,application/json" hidden>
           </div>
-          <p class="hint">CSV 請存成 UTF-8，第一列可以用這些欄位：名字、帳號、留言、類型（留言／按讚／分享）。</p>
+          <p class="hint">Excel 存的 CSV 可以直接匯入。第一列可以用這些欄位：名字、帳號、留言、類型（留言／按讚／分享）。</p>
           <div class="batches" id="batches"></div>
         </section>
 
@@ -1120,6 +1135,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     <a href="https://github.com/xiiao5777/socialMedia-draw/issues" target="_blank" rel="noopener">回報問題</a>
   </footer>
 </div>
+<div class="loading-cover" id="loading" role="status" hidden><p>正在讀取上次的抽獎…</p></div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <p class="sr-only" id="announcer" aria-live="polite"></p>
 <dialog class="confirm" id="confirm" aria-labelledby="confirm-title" aria-describedby="confirm-text">
@@ -1351,6 +1367,32 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     if (field !== '' || row.length) { row.push(field); rows.push(row); }
     return rows.filter(function (r) { return r.some(function (x) { return x.trim() !== ''; }); });
   }
+  // Files from Excel: "CSV UTF-8" is UTF-8, but the plain "CSV" on Chinese Windows is Big5 (繁體) or
+  // GBK (简体), and "Unicode 文字" is UTF-16. Read UTF-8 when the bytes are valid UTF-8; otherwise
+  // take whichever of Big5 / GBK turns the bytes into more everyday characters (names and 我要抽).
+  var COMMON_HAN = '陳陈林黃黄張张李王吳吴劉刘蔡楊杨許许鄭郑謝谢洪郭邱曾廖賴赖徐周葉叶蘇苏莊庄呂吕江何蕭萧羅罗高潘簡简朱鍾钟彭游詹胡施沈余盧卢梁趙赵顏颜柯翁魏孫孙戴范方宋鄧邓杜傅侯曹薛丁卓馬马阮董唐溫温藍蓝石蔣蒋古紀纪姚連连馮冯歐欧程湯汤田康姜汪白鄒邹黎龔龚嚴严韓韩袁金童陸陆夏柳邵錢钱伍倪于譚谭熊任甘秦顧顾毛章史萬万雷' +
+    '美玲婷雅志豪偉伟明華华文芳慧秀英麗丽敏靜静怡佳君欣宇杰俊建國国家成龍龙強强傑輝辉鳳凤珍娟霞燕紅红梅蘭兰琳瑩莹晶穎颖嘉恩安心思詩诗晴涵萱妤宏民平正永興兴德仁義义忠信和順顺福祥生光新春秋月雲云山海天亮小大中' +
+    '我要抽獎奖好想謝分享參参加讚赞留言喜歡欢你的了是在有人這这個个們们來来一不也很都會会說说給给可以啊哈希望能到支持朋友';
+  function decodeFile(buf) {
+    var bytes = new Uint8Array(buf);
+    if (bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) return { text: new TextDecoder('utf-8').decode(bytes.subarray(3)), enc: '' };
+    if (bytes[0] === 0xFF && bytes[1] === 0xFE) return { text: new TextDecoder('utf-16le').decode(bytes.subarray(2)), enc: '' };
+    if (bytes[0] === 0xFE && bytes[1] === 0xFF) return { text: new TextDecoder('utf-16be').decode(bytes.subarray(2)), enc: '' };
+    try { return { text: new TextDecoder('utf-8', { fatal: true }).decode(bytes), enc: '' }; } catch (e) { /* not UTF-8 */ }
+    var common = new Set(COMMON_HAN), best = null;
+    [['big5', '繁體 Big5'], ['gbk', '简体 GBK']].forEach(function (c) {
+      var text;
+      try { text = new TextDecoder(c[0]).decode(bytes); } catch (e) { return; }
+      var score = 0, seen = 0;
+      for (var ch of text) {
+        if (ch === '\uFFFD') score -= 3;
+        else if (common.has(ch)) score++;
+        if (++seen > 20000) break;
+      }
+      if (!best || score > best.score) best = { text: text, enc: c[1], score: score };
+    });
+    return best || { text: new TextDecoder('utf-8').decode(bytes), enc: '' };
+  }
   function headerKind(h) {
     if (/^(handle|username|user ?id|id|帳號|帳戶|用戶名|使用者名稱|profile|profile ?url|url|link|連結|個人檔案)$/.test(h)) return 'handle';
     if (/(留言|評論|回覆|內容|comment|text|message|reply)/.test(h)) return 'text';
@@ -1461,22 +1503,95 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
       ui: Object.assign(base.ui, s.ui || {})
     };
   }
+  // Saving. The giveaway is kept in localStorage, which holds about 5 MB. A big one (a post with
+  // ten thousand comments) does not fit, so it then goes to IndexedDB and localStorage keeps only
+  // { v: 1, big: <id> }: that note tells the next visit and the other open tabs to read it from
+  // IndexedDB. When neither can keep it, a banner says so, instead of the giveaway quietly
+  // disappearing on the next reload.
+  var BIG_DB = 'giveaway-draw-state', BIG_STORE = 'state';
+  var bigOpen = null;
+  function bigDb() {
+    if (!bigOpen) bigOpen = new Promise(function (resolve) {
+      try {
+        var req = indexedDB.open(BIG_DB, 1);
+        req.onupgradeneeded = function () { req.result.createObjectStore(BIG_STORE); };
+        req.onsuccess = function () { resolve(req.result); };
+        req.onerror = function () { resolve(null); };
+        req.onblocked = function () { resolve(null); };
+      } catch (e) { resolve(null); }
+    });
+    return bigOpen;
+  }
+  // Keep `json` in IndexedDB, or delete the copy there when `json` is null.
+  function bigWrite(json) {
+    return bigDb().then(function (db) {
+      if (!db) throw new Error('IndexedDB unavailable');
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(BIG_STORE, 'readwrite');
+        var st = tx.objectStore(BIG_STORE);
+        if (json == null) st.delete('state');
+        else st.put(json, 'state');
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror = tx.onabort = function () { reject(tx.error || new Error('IndexedDB write failed')); };
+      });
+    });
+  }
+  function bigRead() {
+    return bigDb().then(function (db) {
+      if (!db) return null;
+      return new Promise(function (resolve) {
+        try {
+          var req = db.transaction(BIG_STORE, 'readonly').objectStore(BIG_STORE).get('state');
+          req.onsuccess = function () {
+            var s = null;
+            try { s = typeof req.result === 'string' ? JSON.parse(req.result) : null; } catch (e) { /* unreadable */ }
+            resolve(s && s.v === 1 ? normalizeState(s) : null);
+          };
+          req.onerror = function () { resolve(null); };
+        } catch (e) { resolve(null); }
+      });
+    });
+  }
+  var inBig = false;    // the saved giveaway is the copy in IndexedDB
+  var bigUsed = false;  // this tab wrote to IndexedDB: delete that copy once the giveaway fits localStorage again
+  var loading = false;  // reading the IndexedDB copy at start: nothing may be saved over it meanwhile
+  var saveSeq = 0;
+
+  // The saved giveaway, or null when it is in IndexedDB (then read when the page starts, at the end).
   function load() {
     try {
       var raw = localStorage.getItem(STORE_KEY);
       if (raw) {
         var s = JSON.parse(raw);
+        if (s && s.v === 1 && s.big) { inBig = true; return null; }
         if (s && s.v === 1) return normalizeState(s);
       }
     } catch (e) { /* storage unavailable: start fresh */ }
     return makeSample();
   }
+  function showSaveProblem(on) { $('#save-banner').hidden = !on; }
   var saveTimer = null;
   function flush() {
     clearTimeout(saveTimer);
     saveTimer = null;
+    if (loading) return;
+    var json = JSON.stringify(state);
+    var seq = ++saveSeq;
+    var fits = false;
+    try { localStorage.setItem(STORE_KEY, json); fits = true; } catch (e) { /* too big, or storage blocked */ }
+    if (fits) {
+      if (inBig || bigUsed) { inBig = false; bigUsed = false; bigWrite(null).catch(function () {}); }
+      showSaveProblem(false);
+    } else {
+      bigUsed = true;
+      bigWrite(json).then(function () {
+        if (seq !== saveSeq) return; // a newer save took over
+        localStorage.setItem(STORE_KEY, JSON.stringify({ v: 1, big: uid() }));
+        inBig = true;
+        showSaveProblem(false);
+      }).catch(function () { if (seq === saveSeq) showSaveProblem(true); });
+    }
     try {
-      localStorage.setItem(STORE_KEY, JSON.stringify(state));
       var ev = lastEv || evaluate();
       localStorage.setItem(SUMMARY_KEY, JSON.stringify({
         at: Date.now(), sample: !!state.sample, people: ev.people.length, eligible: ev.eligibleCount,
@@ -1485,10 +1600,23 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     } catch (e) { /* storage unavailable */ }
   }
   function save() {
+    if (loading) return;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(flush, 150);
   }
   window.addEventListener('pagehide', function () { if (saveTimer) flush(); });
+  // Show a giveaway that was saved elsewhere (another tab, or the IndexedDB copy at start).
+  function useState(next) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    state = next;
+    syncRuleInputs();
+    $('#opt-anim').checked = !!state.ui.anim;
+    syncImportUI();
+    renderPrizeEditor(true);
+    renderAll();
+    avLoad().then(function () { renderAll(); });
+  }
   // The giveaway is open in another tab too: when that tab saves, take its data, so this tab
   // never writes older data over it. During a draw this tab's result is saved next and wins.
   window.addEventListener('storage', function (e) {
@@ -1496,15 +1624,12 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     if (busy) return;
     var s = null;
     try { s = e.key === null ? null : JSON.parse(e.newValue || 'null'); } catch (err) { /* unreadable: start empty */ }
-    clearTimeout(saveTimer);
-    saveTimer = null;
-    state = s && s.v === 1 ? normalizeState(s) : makeEmpty();
-    syncRuleInputs();
-    $('#opt-anim').checked = !!state.ui.anim;
-    syncImportUI();
-    renderPrizeEditor(true);
-    renderAll();
-    avLoad().then(function () { renderAll(); });
+    if (s && s.v === 1 && s.big) {
+      bigRead().then(function (next) { if (next && !busy) { inBig = true; useState(next); } });
+      return;
+    }
+    inBig = false;
+    useState(s && s.v === 1 ? normalizeState(s) : makeEmpty());
   });
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden' && saveTimer) flush(); });
   function addLog(kind, text) {
@@ -1607,43 +1732,80 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
   }
 
   // ---------- Derived data ----------
+  // What the rules need from a record, worked out once per record: lists can hold tens of
+  // thousands of them and the rules are checked again on every change.
+  var recCache = new WeakMap();
+  function recInfo(r) {
+    var c = recCache.get(r);
+    if (!c) {
+      c = { nk: normKey(r.name), hk: r.handle ? normKey(r.handle) : '', low: lowText(r.text) };
+      c.tags = Array.isArray(r.tags) ? r.tags.map(normKey).filter(Boolean) : Array.from(mentionsOf(r.text));
+      recCache.set(r, c);
+    }
+    return c;
+  }
+  function lowText(s) { return String(s || '').normalize('NFKC').toLowerCase(); }
+  // A record with an account the people so far don't have: is it someone already met by name?
+  // Facebook can link one person differently in the comments and in the likes list, so a single
+  // person with that name is taken to be the same one. But two accounts with one name in the same
+  // list are two people, and different @handles on X / Threads are always different people.
+  function sameName(cands, r, hk, bid) {
+    if (!cands.length) return null;
+    if (!hk) return cands[0];
+    for (var i = 0; i < cands.length; i++) if (!cands[i].handle) return cands[i];
+    var c = cands[0];
+    return cands.length === 1 && !c.lists.has(bid) && !(isAtHandle(c.handle) && isAtHandle(r.handle)) ? c : null;
+  }
   function buildPeople() {
     var order = [];
     var byName = new Map();
     var byHandle = new Map();
     var commentCount = 0;
+    function named(k) { return (k && byName.get(k)) || []; }
     state.batches.forEach(function (b) {
       b.records.forEach(function (r) {
-        var nk = normKey(r.name);
-        var hk = r.handle ? normKey(r.handle) : '';
+        var info = recInfo(r), nk = info.nk, hk = info.hk;
         if (!nk && !hk) return;
-        var p = (hk && byHandle.get(hk)) || byName.get(nk) || (hk && byName.get(hk)) || null;
+        var p = (hk && byHandle.get(hk)) || null;
         if (!p) {
-          p = { key: hk ? 'h:' + hk : 'n:' + nk, name: r.name, handle: r.handle || '', url: '', comments: [], links: [], liked: false, shared: false, mentions: new Set() };
+          var cands = named(nk).concat(named(hk).filter(function (x) { return named(nk).indexOf(x) === -1; }));
+          p = sameName(cands, r, hk, b.id);
+        }
+        if (!p) {
+          p = { key: hk ? 'h:' + hk : 'n:' + nk, name: r.name, handle: r.handle || '', url: '', comments: [], low: [], links: [], liked: false, shared: false, mentions: new Set(), lists: new Set() };
           order.push(p);
         }
-        if (hk && !byHandle.has(hk)) byHandle.set(hk, p);
-        if (nk && !byName.has(nk)) byName.set(nk, p);
+        if (hk) {
+          if (!byHandle.has(hk)) byHandle.set(hk, p);
+          p.lists.add(b.id);
+        }
+        if (nk) {
+          var same = byName.get(nk);
+          if (!same) byName.set(nk, same = []);
+          if (same.indexOf(p) === -1) same.push(p);
+        }
         if (!p.handle && r.handle) p.handle = r.handle;
         if (!p.url && r.url) p.url = r.url;
         if (b.type === 'comment') {
           commentCount++;
           p.comments.push(r.text || '');
+          p.low.push(info.low);
           p.links.push(r.link || '');
-          if (Array.isArray(r.tags)) r.tags.forEach(function (t) { var k = normKey(t); if (k) p.mentions.add(k); });
-          else mentionsOf(r.text).forEach(function (m) { p.mentions.add(m); });
+          info.tags.forEach(function (t) { p.mentions.add(t); });
         } else if (b.type === 'like') p.liked = true;
         else if (b.type === 'share') p.shared = true;
       });
     });
+    // People who share a name with someone else get a note in the roster
+    byName.forEach(function (list) { if (list.length > 1) list.forEach(function (p) { p.namesake = true; }); });
     return { people: order, commentCount: commentCount };
   }
   function keywordList() {
-    return splitList(state.rules.keywords).map(function (k) { return k.normalize('NFKC').toLowerCase(); });
+    return splitList(state.rules.keywords).map(lowText);
   }
-  function matchKeywords(comments, kws, mode) {
-    return comments.some(function (c) {
-      var t = String(c || '').normalize('NFKC').toLowerCase();
+  // `lows`: comments already in lowText form
+  function matchKeywords(lows, kws, mode) {
+    return lows.some(function (t) {
       return mode === 'all' ? kws.every(function (k) { return t.indexOf(k) !== -1; }) : kws.some(function (k) { return t.indexOf(k) !== -1; });
     });
   }
@@ -1651,7 +1813,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
   function bestComment(p) {
     var R = state.rules, kws = R.needKeyword ? keywordList() : [];
     var i = -1;
-    if (kws.length) i = p.comments.findIndex(function (c) { return matchKeywords([c], kws, R.keywordMode); });
+    if (kws.length) i = p.low.findIndex(function (t) { return matchKeywords([t], kws, R.keywordMode); });
     if (i < 0) i = p.comments.findIndex(function (c) { return String(c).trim(); });
     if (i < 0 && p.comments.length) i = 0;
     return i < 0 ? { text: '', link: '' } : { text: p.comments[i] || '', link: (p.links && p.links[i]) || '' };
@@ -1660,7 +1822,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     var built = buildPeople();
     var R = state.rules;
     var kws = R.needKeyword ? keywordList() : [];
-    var excl = new Set(splitList(R.exclude).map(normKey));
+    var excl = new Set(splitList(R.exclude).map(exclKey));
     var ticket = 0;
     built.people.forEach(function (p) {
       var reasons = [];
@@ -1669,7 +1831,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
       if (R.needLike && !p.liked) reasons.push('沒有按讚');
       if (R.needShare && !p.shared) reasons.push('沒有分享');
       if (R.needTag && p.mentions.size < R.tagCount) reasons.push('只標記 ' + p.mentions.size + ' 位（需要 ' + R.tagCount + ' 位）');
-      if (R.needKeyword && kws.length && !matchKeywords(p.comments, kws, R.keywordMode)) reasons.push('留言沒有關鍵字');
+      if (R.needKeyword && kws.length && !matchKeywords(p.low, kws, R.keywordMode)) reasons.push('留言沒有關鍵字');
       p.reasons = reasons;
       p.eligible = reasons.length === 0;
       p.ticket = p.eligible ? ++ticket : 0;
@@ -1763,7 +1925,17 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     $('#tool-banner-title').textContent = '抓取工具有新版 v' + COLLECTOR_VERSION + '。';
     $('#tool-banner-text').textContent = '你剛剛加入的名單是用舊版' + (v !== '?' ? '（v' + v + '）' : '') + '抓的，名單已經照常加入。下次抓之前，請先刪掉書籤列上的「抓取抽獎名單」，再照安裝說明重新拖一次新版。';
   }
+  // Typing in a rule box re-checks everyone. With big lists that takes a moment, so wait until the
+  // typing pauses; small lists update on every key.
+  var renderTimer = null;
+  function bigLists() { return !!lastEv && lastEv.commentCount + lastEv.people.length > 4000; }
+  function renderSoon() {
+    clearTimeout(renderTimer);
+    if (bigLists()) renderTimer = setTimeout(renderAll, 200);
+    else renderAll();
+  }
   function renderAll() {
+    clearTimeout(renderTimer);
     var ev = evaluate();
     renderStats(ev);
     $('#sample-banner').hidden = !state.sample;
@@ -1951,6 +2123,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     if (p.liked) meta.push('按讚');
     if (p.shared) meta.push('分享');
     if (p.mentions.size) meta.push('標記 ' + p.mentions.size + ' 位');
+    if (p.namesake) meta.push('有同名的人');
     var status;
     if (w) status = el('span', { class: 'pill ' + (w.void ? 'pill-void' : 'pill-won') }, w.void ? '已作廢' : '已得獎');
     else if (p.eligible) status = el('span', { class: 'pill pill-ok' }, '符合');
@@ -1976,14 +2149,21 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     );
   }
   // A hand-picked exclusion goes into step 2's 排除名單, so every exclusion stays in one list that
-  // people can read and edit, and the log counts it. Names are unique among people (records with
-  // the same name merge), so the name is used, or the @handle on X / Threads.
+  // people can read and edit, and the log counts it. The name is used, or the @handle on X / Threads.
+  // When two people share the name (or the name has a comma), the entry names the account too:
+  // 「Jason Tan（fb:1234）」 leaves out that account only.
   function exclusionEntry(p) {
-    if (isAtHandle(p.handle) || (p.handle && /[,，、;；]/.test(p.name))) return p.handle;
+    if (isAtHandle(p.handle)) return p.handle;
+    if (p.handle && (p.namesake || /[,，、;；]/.test(p.name))) return p.name.replace(/[,，、;；]/g, ' ').trim() + '（' + p.handle + '）';
     return p.name;
   }
+  // What an entry of the 排除名單 matches: the account in 「名字（fb:1234）」 or 「名字（@abc）」, else the text.
+  function exclKey(x) {
+    var m = /[（(]\s*((?:fb:|@)[^\s（）()]+)\s*[）)]\s*$/i.exec(x);
+    return normKey(m ? m[1] : x);
+  }
   function setExcluded(p, on) {
-    var same = function (x) { var k = normKey(x); return k === normKey(p.name) || (!!p.handle && k === normKey(p.handle)); };
+    var same = function (x) { var k = exclKey(x); return k === normKey(p.name) || (!!p.handle && k === normKey(p.handle)); };
     var list = splitList(state.rules.exclude).filter(function (x) { return !same(x); });
     if (on) list.push(exclusionEntry(p));
     state.rules.exclude = list.join('\n');
@@ -2427,14 +2607,16 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
       e.target.value = '';
       if (!f) return;
       var ext = ((f.name.match(/\.([a-z0-9]+)$/i) || [])[1] || '').toLowerCase();
-      if (ext === 'xlsx' || ext === 'xls') { toast('請先在 Excel 用「另存新檔」存成 CSV（UTF-8），再匯入'); return; }
-      f.text().then(function (text) {
-        text = text.replace(/^\uFEFF/, '');
+      if (ext === 'xlsx' || ext === 'xls') { toast('請先在 Excel 用「另存新檔」存成 CSV，再匯入'); return; }
+      f.arrayBuffer().then(function (buf) {
+        var dec = decodeFile(buf);
+        var text = dec.text.replace(/^\uFEFF/, '');
         var col = parseCollected(text);
         if (col) { addCollected(col, '檔案'); return; }
         var type = state.ui.importType;
         var firstLine = text.split(/\r?\n/)[0] || '';
-        var isTable = ext === 'csv' || ext === 'tsv' || (!ext && /[,\t]/.test(firstLine));
+        // A table: CSV / TSV, or a .txt with tabs (Excel's 「Unicode 文字」 is tab-separated, with a header row)
+        var isTable = ext === 'csv' || ext === 'tsv' || ((!ext || ext === 'txt') && /\t/.test(firstLine)) || (!ext && /,/.test(firstLine));
         var groups;
         if (isTable) groups = csvToGroups(parseDelimited(text), type);
         else { groups = { comment: [], like: [], share: [] }; groups[type] = parsePaste(text, type); }
@@ -2446,7 +2628,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
         });
         save();
         renderAll();
-        toast((cleared ? '已清除範例資料，' : '') + '從 ' + f.name + ' 加入 ' + total + ' 筆');
+        toast((cleared ? '已清除範例資料，' : '') + '從 ' + f.name + ' 加入 ' + total + ' 筆' + (dec.enc ? '（用' + dec.enc + ' 編碼讀取，名字不對的話請在 Excel 另存成「CSV UTF-8」）' : ''));
       }, function () { toast('讀不到這個檔案'); });
     });
 
@@ -2460,19 +2642,24 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
         if (key === 'keywords' && n.value.trim() && !state.rules.needKeyword) { state.rules.needKeyword = true; $('#r-kw').checked = true; }
         if (key === 'tagCount' && !state.rules.needTag) { state.rules.needTag = true; $('#r-tag').checked = true; }
         save();
-        renderAll();
+        if (evName === 'input') renderSoon(); else renderAll();
       });
     });
     $('#r-tag-n').addEventListener('change', function () { $('#r-tag-n').value = state.rules.tagCount; });
 
+    // The roster filters and search only change what is shown: they reuse the last check of the rules.
     $$('#people-filter button').forEach(function (b) {
       b.addEventListener('click', function () {
         state.ui.filter = b.dataset.f;
         save();
-        renderPeople(evaluate());
+        renderPeople(lastEv || evaluate());
       });
     });
-    $('#people-q').addEventListener('input', function () { renderPeople(evaluate()); });
+    var searchTimer = null;
+    $('#people-q').addEventListener('input', function () {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(function () { renderPeople(lastEv || evaluate()); }, bigLists() ? 150 : 0);
+    });
 
     $('#btn-add-prize').addEventListener('click', function () {
       state.prizes.push({ id: uid(), name: '獎項 ' + (state.prizes.length + 1), qty: 1 });
@@ -2654,6 +2841,12 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
   }
 
   state = load();
+  if (!state) {
+    // A big giveaway saved in IndexedDB: cover the page until it is read
+    state = makeEmpty();
+    loading = true;
+    $('#loading').hidden = false;
+  }
   syncRuleInputs();
   $('#opt-anim').checked = !!state.ui.anim;
   wire();
@@ -2662,7 +2855,19 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
   renderAll();
   showView(false);
   $('#foot-ver').textContent = 'v' + COLLECTOR_VERSION;
-  avLoad().then(function () {
+  var ready = !loading ? Promise.resolve() : bigRead().then(function (next) {
+    loading = false;
+    $('#loading').hidden = true;
+    if (next) {
+      useState(next);
+      showView(false);
+    } else {
+      inBig = false;
+      toast('讀不到上次存的抽獎資料');
+    }
+  });
+  // Pictures of people no longer in any list are dropped, once the lists are known
+  Promise.all([ready, avLoad()]).then(function () {
     avGc();
     if (avatars.size) renderAll();
   });
