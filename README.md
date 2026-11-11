@@ -5,6 +5,7 @@ Facebook、X、Threads 貼文抽獎工具。抓下貼文的留言、按讚和分
 **網站：https://xiiao5777.github.io/socialMedia-draw/**
 
 - 免費、不用登入，名單只留在使用者自己的瀏覽器，不會上傳；關掉抽獎系統的分頁就清除
+- 每個平台各一場抽獎：Facebook、X、Threads 的名單自動分開，可以各開一個分頁同時辦，互不影響
 - 同一個人留言很多次只算一次，抽出的人自動移出抽獎池
 - 參加條件：留言、按讚、分享、標記幾位好友、包含關鍵字、排除名單
 - 複製得獎公告、下載 CSV 紀錄，抽獎過程全部有紀錄
@@ -50,7 +51,9 @@ npm test                          # 檢查 index.html 是最新的，再跑全�
 
 使用者把舊版書籤抓的名單貼到抽獎頁時，抽獎頁會提醒他們重新安裝。
 
-「送到抽獎系統」用 `window.open` 打開 `draw.html#receive`（同一個分頁名稱 `giveaway-draw` 會重複使用），再用 `postMessage` 交名單：工具一直送 `hello`，抽獎頁回 `ready` 後送出 `send`，抽獎頁回 `ack`（`ok` 和一句說明）。抽獎頁只接受 Facebook、X、Threads 網域送來的訊息；新分頁被擋住時工具改成複製。
+「送到抽獎系統」用 `window.open` 打開 `draw.html?g=<平台>#receive`（分頁名稱 `giveaway-draw-<平台>`，同一個平台會重複使用同一個分頁），再用 `postMessage` 交名單：工具一直送 `hello`，抽獎頁回 `ready` 後送出 `send`，抽獎頁回 `ack`（`ok` 和一句說明）。抽獎頁只接受 Facebook、X、Threads 網域送來的訊息；新分頁被擋住時工具改成複製。
+
+抽獎頁每個平台各存一場抽獎（`localStorage` 的 `giveaway-draw:v1:<facebook|x|threads|other>`），抓取工具的名單不管從哪裡送來或貼上，都會放進它的平台那一場；`other` 是還沒有抓取工具名單的抽獎（範例、手動貼上、CSV），收到第一份平台名單時就變成那個平台的。每個開著的分頁會登記它顯示過的抽獎，新分頁打開時，沒有任何分頁登記的抽獎就刪除（關掉分頁就清除）。
 
 ### 換網址
 

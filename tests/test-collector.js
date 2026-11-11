@@ -197,7 +197,7 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   check(u0 && u0.name === 'User 0' && u0.tags && u0.tags.join() === '@friend_0,@friend_1', 'X: name, handle and mention tags (' + JSON.stringify(u0) + ')');
   check(u0 && u0.url === 'https://x.com/user_0' && u0.link === 'https://x.com/user_0/status/1000', 'X: profile link and reply link');
   check(/略過貼文作者/.test(r.panelText), 'X: panel reports skipped owner replies');
-  check(await countLine(r.page) === '33/ 33 則留言' && !await hasGoOn(r.page), 'X: reads "34 replies" from the post, less the author\'s own, 33 / 33 (' + await countLine(r.page) + ')');
+  check(await countLine(r.page) === '33/ 34 則留言' && !await hasGoOn(r.page), 'X: shows the post\'s "34 replies" as it is, 33 / 34 with the author\'s own reply skipped (' + await countLine(r.page) + ')');
   const xav = (x && x.avatars) || {};
   check(Object.keys(xav).length === 33 && !xav['@brand'], 'X: 33 avatars, none for the owner (got ' + Object.keys(xav).length + ')');
   check(r.imgLog.some(l => l.cors && /user_0_bigger\.jpg$/.test(l.url)), 'X: asks for the sharper *_bigger avatar');
@@ -222,10 +222,27 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   check(t0i && t0i.text === '我要抽 @pal_0 @pal_2' && t0i.tags && t0i.tags.length === 2, 'Threads: text and tags (' + JSON.stringify(t0i) + ')');
   check(t0i && t0i.url === 'https://www.threads.com/@th.user0' && t0i.link === 'https://www.threads.com/@th.user0/post/R0', 'Threads: profile link and reply link');
   check(th && !th.items.some(i => i.handle === '@brandtw'), 'Threads: main post and owner reply skipped');
-  check(await countLine(r.page) === '16/ 16 則留言' && !await hasGoOn(r.page), 'Threads: reads the number next to the reply icon, 16 / 16 (' + await countLine(r.page) + ')');
+  check(await countLine(r.page) === '16/ 17 則留言' && !await hasGoOn(r.page), 'Threads: reads the number next to the reply icon, 16 / 17 with the author\'s own reply skipped (' + await countLine(r.page) + ')');
   const tav = (th && th.avatars) || {};
   check(Object.keys(tav).length === 16 && await avatarMatches(r.page, tav['@th.user5'], 'https://scontent-tpe1-1.cdninstagram.com/v/t51.2885-19/th.user5_n.jpg'), 'Threads: 16 avatars, th.user5 correct');
   fs.writeFileSync(path.join(OUT, 'sample-threads.json'), r.raw);
+  await r.ctx.close();
+
+  // The author answers most replies, which the post's number leaves out: the number after the slash
+  // stays the post's 12 (it used to drop as answers were skipped, down to 「12 / 2」), and the run
+  // does not stop early because the answers made the count look complete.
+  r = await runOn(browser, 'https://www.threads.com/@brandtw/post/DOwner1', { before: (page) => page.evaluate(() => {
+    window.__dens = [];
+    setInterval(() => {
+      const root = document.getElementById('giveaway-collector-host');
+      const n = root && root.shadowRoot.querySelector('span[style*="tabular-nums"]');
+      const m = n && n.nextSibling && /\/ (\d+)/.exec(n.nextSibling.textContent);
+      if (m && !window.__dens.includes(m[1])) window.__dens.push(m[1]);
+    }, 100);
+  }) });
+  const dens = await r.page.evaluate(() => window.__dens);
+  check(r.result && r.result.items.length === 12 && !r.result.items.some(i => i.handle === '@brandtw'), 'Owner answers: all 12 replies, waited through the slow last ones (got ' + (r.result && r.result.items.length) + ')');
+  check(dens.join() === '12' && await countLine(r.page) === '12/ 12 則留言' && /已略過貼文作者自己的 10 則回覆/.test(r.panelText), 'Owner answers: the post\'s number stays 12 the whole time (' + dens.join() + ' / ' + await countLine(r.page) + ')');
   await r.ctx.close();
 
   // Threads likes dialog: the picture server refuses other pages (no CORS)
@@ -255,8 +272,8 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   check(ft.includes('✓ 已送到抽獎系統：加入 4 則留言（含 3 張頭像）。') && /還要抓按讚或分享的人/.test(ft) && await btn(r.page, '✓ 已送出').count() === 1,
     'Send FB: 送到抽獎系統 adds the comments, the panel says so and offers 抓按讚 / 抓分享');
   const dtxt = (s) => drawTab.$eval(s, n => n.textContent.trim());
-  check(drawTab.url() === SITE + 'draw.html' && await dtxt('#s-people') === '4' && await drawTab.locator('#batches .batch').count() === 1 && await drawTab.isHidden('#sample-banner'),
-    'Send FB: the draw page has the 4 people in place of the sample, and its address lost #receive (' + drawTab.url() + ')');
+  check(drawTab.url() === SITE + 'draw.html?g=facebook' && await drawTab.title() === 'Facebook 抽獎｜抽獎系統' && await dtxt('#s-people') === '4' && await drawTab.locator('#batches .batch').count() === 1 && await drawTab.isHidden('#sample-banner'),
+    'Send FB: the draw page has the 4 people in place of the sample, it is the Facebook giveaway and its address lost #receive (' + drawTab.url() + ')');
   check(await drawTab.isVisible('#recv-banner') && (await dtxt('#recv-banner')).startsWith('已收到 Facebook 的留言名單：加入 4 則留言') && (await dtxt('#recv-banner')).includes('回到貼文的分頁'),
     'Send FB: the draw page says what it got and how to add the likes (' + (await dtxt('#recv-title')) + ')');
   await drawTab.screenshot({ path: path.join(OUT, 'shot-send-draw.png'), clip: { x: 0, y: 0, width: 1200, height: 420 } });
