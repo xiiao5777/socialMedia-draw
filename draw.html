@@ -213,6 +213,36 @@ button { font: inherit; }
 a.btn { text-decoration: none; }
 
 /* Views: 準備 (#setup) and 抽獎 (#draw), switched by the tab bar that stays at the top */
+/* 你的抽獎: one button per giveaway (Facebook, X, Threads), once there are two */
+.gsw {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0 0 14px;
+}
+.gsw[hidden] { display: none; }
+.gsw-label { color: var(--muted); font-size: 14px; }
+.gsw-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.gsw-btn {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.gsw-btn small { color: var(--muted); font-size: 12.5px; font-weight: 500; }
+.gsw-btn:hover { border-color: var(--muted); }
+.gsw-btn[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: var(--paper); cursor: default; }
+.gsw-btn[aria-pressed="true"] small { color: inherit; opacity: .8; }
 .views-bar {
   position: sticky;
   top: 0;
@@ -940,6 +970,11 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     </div>
   </div>
 
+  <nav class="gsw" id="gsw" aria-labelledby="gsw-label" hidden>
+    <span class="gsw-label" id="gsw-label">你的抽獎：</span>
+    <div class="gsw-list" id="gsw-list"></div>
+  </nav>
+
   <div class="views-bar">
     <nav class="views" id="views" aria-label="抽獎步驟">
       <a class="view-tab" href="#setup" data-view="setup"><b>準備</b><small><span class="vt-steps">第 1–3 步・</span>名單、條件、獎品</small></a>
@@ -1179,22 +1214,33 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
 (function () {
   'use strict';
 
-  var STORE_KEY = 'giveaway-draw:v1';
-  // A few numbers for the homepage's 「繼續抽獎」 line.
-  var SUMMARY_KEY = 'giveaway-draw:summary';
-  // A giveaway lasts while a page of this site that has it stays open (關掉分頁就清除). Each such page
-  // is listed under OPEN_KEY + an id of its own while it is open, and TAB_KEY in sessionStorage notes
-  // that its tab has the giveaway (a reload keeps the note, a new tab has none). A new tab that finds
-  // no other page listed deletes what was saved before it shows anything. USED_KEY only notes that
-  // this browser has run a giveaway (no names): the homepage then treats the visitor as returning,
-  // and the draw page starts empty instead of with the sample.
+  // One giveaway per platform: a list from the 抓取工具 goes to the giveaway of its platform, which has
+  // its own lists, rules, prizes, winners and log, so a Facebook giveaway and an X one never get in
+  // each other's way. 'other' is a giveaway without a 抓取工具 list (the sample, typed or CSV names).
+  // Each is saved under STORE_PREFIX + its id, with a few numbers for the homepage under
+  // SUMMARY_PREFIX + its id. LEGACY_* are where the one giveaway of older versions was kept.
+  var GIDS = ['facebook', 'x', 'threads', 'other'];
+  var GID_LABEL = { facebook: 'Facebook', x: 'X', threads: 'Threads', other: '其他名單' };
+  function gidName(g) { return g === 'other' ? '其他名單的抽獎' : GID_LABEL[g] + ' 的抽獎'; }
+  var STORE_PREFIX = 'giveaway-draw:v1:';
+  var SUMMARY_PREFIX = 'giveaway-draw:summary:';
+  var LEGACY_STORE = 'giveaway-draw:v1';
+  var LEGACY_SUMMARY = 'giveaway-draw:summary';
+  function stateKey(g) { return STORE_PREFIX + g; }
+  function summaryKey(g) { return SUMMARY_PREFIX + g; }
+  // A giveaway lasts while a page of this site that has shown it stays open (關掉分頁就清除). Each
+  // open page is listed under OPEN_KEY + an id of its own, as "<time>|<giveaway ids it holds>", and
+  // TAB_KEY in sessionStorage keeps the tab's ids (a reload keeps them, a new tab has none). A new
+  // tab first deletes every saved giveaway that no other page holds. USED_KEY only notes that this
+  // browser has run a giveaway (no names): the homepage then treats the visitor as returning, and the
+  // draw page starts empty instead of with the sample.
   var TAB_KEY = 'giveaway-draw:tab';
   var OPEN_KEY = 'giveaway-draw:open:';
   var USED_KEY = 'giveaway-draw:used';
   var STALE_MS = 12 * 3600 * 1000;  // a page not heard from for 12 hours was killed, not just asleep
   // Newest 名單抓取工具 version; build.js refuses to build when it differs from src/collector.js.
   // A pasted result from an older tool shows a banner asking to reinstall the bookmark.
-  var COLLECTOR_VERSION = '1.5';
+  var COLLECTOR_VERSION = '1.6';
   var TYPE_LABEL = { comment: '留言', like: '按讚', share: '分享' };
   var PLATFORM_LABEL = { facebook: 'Facebook', x: 'X', threads: 'Threads' };
   var PLACEHOLDER = {
@@ -1209,6 +1255,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
   };
 
   var state;
+  var gid = 'other';  // the giveaway this tab shows
   var lastEv = null;
   var busy = false;
   var rolling = false;
@@ -1357,12 +1404,15 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     return {
       kind: o.kind,
       platform: PLATFORM_LABEL[o.platform] || '貼文',
+      gid: gidOf(o.platform),
       sig: [o.platform, o.kind, o.page, o.at].join('|'),
       tool: typeof o.tool === 'string' ? o.tool.slice(0, 12) : '',
       records: records,
       avatars: avatars
     };
   }
+  // The giveaway a platform's lists go to ('' for none: they join the giveaway on screen)
+  function gidOf(platform) { return { facebook: 'facebook', x: 'x', twitter: 'x', threads: 'threads' }[platform] || ''; }
   function cmpVer(a, b) {
     var x = String(a || '0').split('.'), y = String(b || '0').split('.');
     for (var i = 0; i < Math.max(x.length, y.length); i++) {
@@ -1542,12 +1592,12 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
       ui: ui
     };
   }
-  // Saving. The giveaway is kept in localStorage, which holds about 5 MB. A big one (a post with
-  // ten thousand comments) does not fit, so it then goes to IndexedDB and localStorage keeps only
-  // { v: 1, big: <id> }: that note tells the next visit and the other open tabs to read it from
-  // IndexedDB. When neither can keep it, a banner says so, instead of the giveaway quietly
-  // disappearing on the next reload.
-  var BIG_DB = 'giveaway-draw-state', BIG_STORE = 'state';
+  // Saving. A giveaway is kept in localStorage, which holds about 5 MB. A big one (a post with ten
+  // thousand comments) does not fit, so it then goes to IndexedDB, under its giveaway id, and
+  // localStorage keeps only { v: 1, big: <id> }: that note tells the next visit and the other open
+  // tabs to read it from IndexedDB. When neither can keep it, a banner says so, instead of the
+  // giveaway quietly disappearing on the next reload. BIG_LEGACY: where an older version kept its copy.
+  var BIG_DB = 'giveaway-draw-state', BIG_STORE = 'state', BIG_LEGACY = 'state';
   var bigOpen = null;
   function bigDb() {
     if (!bigOpen) bigOpen = new Promise(function (resolve) {
@@ -1561,26 +1611,26 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     });
     return bigOpen;
   }
-  // Keep `json` in IndexedDB, or delete the copy there when `json` is null.
-  function bigWrite(json) {
+  // Keep `json` in IndexedDB as giveaway g, or delete the copy there when `json` is null.
+  function bigWrite(g, json) {
     return bigDb().then(function (db) {
       if (!db) throw new Error('IndexedDB unavailable');
       return new Promise(function (resolve, reject) {
         var tx = db.transaction(BIG_STORE, 'readwrite');
         var st = tx.objectStore(BIG_STORE);
-        if (json == null) st.delete('state');
-        else st.put(json, 'state');
+        if (json == null) st.delete(g);
+        else st.put(json, g);
         tx.oncomplete = function () { resolve(); };
         tx.onerror = tx.onabort = function () { reject(tx.error || new Error('IndexedDB write failed')); };
       });
     });
   }
-  function bigRead() {
+  function bigRead(g) {
     return bigDb().then(function (db) {
       if (!db) return null;
       return new Promise(function (resolve) {
         try {
-          var req = db.transaction(BIG_STORE, 'readonly').objectStore(BIG_STORE).get('state');
+          var req = db.transaction(BIG_STORE, 'readonly').objectStore(BIG_STORE).get(g);
           req.onsuccess = function () {
             var s = null;
             try { s = typeof req.result === 'string' ? JSON.parse(req.result) : null; } catch (e) { /* unreadable */ }
@@ -1591,73 +1641,160 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
       });
     });
   }
-  var inBig = false;    // the saved giveaway is the copy in IndexedDB
+  // Moves the IndexedDB copy kept as `from` to `to`. Reads started later see it moved.
+  function bigMove(from, to) {
+    return bigDb().then(function (db) {
+      if (!db) return;
+      return new Promise(function (resolve) {
+        try {
+          var tx = db.transaction(BIG_STORE, 'readwrite'), st = tx.objectStore(BIG_STORE);
+          var req = st.get(from);
+          req.onsuccess = function () { if (req.result !== undefined) { st.put(req.result, to); st.delete(from); } };
+          tx.oncomplete = tx.onerror = tx.onabort = function () { resolve(); };
+        } catch (e) { resolve(); }
+      });
+    });
+  }
+  var inBig = false;    // the giveaway on screen is the copy in IndexedDB
   var bigUsed = false;  // this tab wrote to IndexedDB: delete that copy once the giveaway fits localStorage again
-  var loading = false;  // reading the IndexedDB copy at start: nothing may be saved over it meanwhile
-  var saveSeq = 0;
+  var loading = false;  // reading an IndexedDB copy: nothing may be saved over it meanwhile
+  var saveSeq = {};     // per giveaway: a big save that a newer one overtook must not write its note
 
-  // The saved giveaway, or null when it is in IndexedDB (then read when the page starts, at the end).
-  function load() {
-    try {
-      var raw = localStorage.getItem(STORE_KEY);
-      if (raw) {
-        var s = JSON.parse(raw);
-        if (s && s.v === 1 && s.big) { inBig = true; return null; }
-        if (s && s.v === 1) return normalizeState(s);
-      }
-    } catch (e) { /* storage unavailable: start fresh */ }
-    return usedBefore() ? makeEmpty() : makeSample();
+  function readJson(key) { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { return null; } }
+  function savedExists(g) { try { return localStorage.getItem(stateKey(g)) !== null; } catch (e) { return false; } }
+  // Giveaway g as saved, or null when it is in IndexedDB (then read with bigRead). One never saved
+  // starts empty, or as the sample for someone new here.
+  function loadGid(g) {
+    inBig = false;
+    bigUsed = false;
+    var s = readJson(stateKey(g));
+    if (s && s.v === 1 && s.big) { inBig = true; return null; }
+    if (s && s.v === 1) return normalizeState(s);
+    return g === 'other' && !usedBefore() ? makeSample() : makeEmpty();
   }
   function usedBefore() { try { return !!localStorage.getItem(USED_KEY); } catch (e) { return false; } }
+  // The saved giveaway changed last, if any.
+  function latestGid() {
+    var best = null, at = -1;
+    GIDS.forEach(function (g) {
+      if (!savedExists(g)) return;
+      var s = readJson(summaryKey(g)), t = (s && s.at) || 0;
+      if (t > at) { best = g; at = t; }
+    });
+    return best;
+  }
 
   // ---------- Open pages ----------
   // This page's own id, never kept in sessionStorage: a duplicated tab copies sessionStorage, and
-  // closing one of the two must not unlist the other.
+  // closing one of the two must not unlist the other. held: the giveaways this tab has shown, which
+  // it keeps while it is open.
   var pageId = null;
-  // Another page of this site listed as having the giveaway (old entries are crashed tabs: dropped)
-  function otherTabsOpen() {
-    var now = Date.now(), open = false;
+  var held = [];
+  // The giveaways the other open pages hold (id -> true), or null while a page of an older version
+  // is open: it holds the one giveaway it knew, whichever that is now. Entries not heard from for
+  // 12 hours are crashed tabs: dropped.
+  function heldElsewhere() {
+    var now = Date.now(), out = {}, old = false;
     try {
       for (var i = localStorage.length - 1; i >= 0; i--) {
         var k = localStorage.key(i);
         if (!k || k.indexOf(OPEN_KEY) !== 0 || k === OPEN_KEY + pageId) continue;
-        if (now - Number(localStorage.getItem(k)) < STALE_MS) open = true;
-        else localStorage.removeItem(k);
+        var v = String(localStorage.getItem(k) || ''), bar = v.indexOf('|');
+        if (!(now - Number(bar < 0 ? v : v.slice(0, bar)) < STALE_MS)) { localStorage.removeItem(k); continue; }
+        if (bar < 0) old = true;
+        else v.slice(bar + 1).split(',').forEach(function (g) { if (g) out[g] = true; });
       }
     } catch (e) { /* storage unavailable */ }
-    return open;
+    return old ? null : out;
   }
-  function markOpen() { try { localStorage.setItem(OPEN_KEY + pageId, String(Date.now())); } catch (e) { /* storage unavailable */ } }
-  // Lists this page as open. Returns true for a new tab with no other page open: the last tab with
-  // the saved giveaway was closed, so it is to be deleted. A reload or Back is the same tab even
-  // without the note (a tab opened before this version had none).
+  function markOpen() { try { localStorage.setItem(OPEN_KEY + pageId, Date.now() + '|' + held.join(',')); } catch (e) { /* storage unavailable */ } }
+  function keepTab() { try { sessionStorage.setItem(TAB_KEY, JSON.stringify({ held: held, cur: gid })); } catch (e) { /* blocked */ } }
+  // This tab shows giveaway g now: it keeps it while open.
+  function hold(g) {
+    if (held.indexOf(g) === -1) held.push(g);
+    keepTab();
+    markOpen();
+  }
+  // Lists this page as open. A new tab first deletes the giveaways no other page holds: their tabs
+  // were closed. A reload or Back is the same tab even without the tab's note (a tab opened before
+  // this version had none). Returns the giveaway this tab showed before, if any.
   function joinTabs() {
-    var known = false;
-    try { known = !!sessionStorage.getItem(TAB_KEY); } catch (e) { /* blocked: every load is a new tab */ }
+    var known = false, info = null;
+    try { var t = sessionStorage.getItem(TAB_KEY); known = t !== null; info = JSON.parse(t); } catch (e) { /* blocked, or an older version's note */ }
     try {
       var nav = performance.getEntriesByType('navigation')[0];
       if (nav && (nav.type === 'reload' || nav.type === 'back_forward')) known = true;
     } catch (e) { /* older browser */ }
+    if (info && Array.isArray(info.held)) held = info.held.filter(function (g) { return !!GID_LABEL[g]; });
     pageId = uid();
-    try { sessionStorage.setItem(TAB_KEY, '1'); } catch (e) { /* blocked */ }
-    var last = !known && !otherTabsOpen();
+    if (!known) dropUnheld();
+    var moved = migrateLegacy();
     markOpen();
     setInterval(markOpen, 30000);
     window.addEventListener('pagehide', function () { try { localStorage.removeItem(OPEN_KEY + pageId); } catch (e) { /* storage unavailable */ } });
     window.addEventListener('pageshow', function (e) { if (e.persisted) markOpen(); });
-    return last;
+    return moved || (info && GID_LABEL[info.cur] ? info.cur : null);
   }
-  // Deletes the saved giveaway: lists, rules, prizes, winners, log, avatars and the IndexedDB copy.
-  function wipeSaved() {
+  function dropUnheld() {
+    var keep = heldElsewhere();
+    if (!keep) return;
+    GIDS.forEach(function (g) { if (!keep[g]) wipeGiveaway(g); });
+    try { if (localStorage.getItem(LEGACY_STORE) !== null) wipeLegacy(); } catch (e) { /* storage unavailable */ }
+  }
+  // An older version kept one giveaway: move it to the giveaway of its lists' platform (a big one
+  // cannot be read yet: it waits in 'other' and becomes its platform's with the next list).
+  function migrateLegacy() {
+    var raw = null;
+    try { raw = localStorage.getItem(LEGACY_STORE); } catch (e) { return null; }
+    if (raw === null) return null;
+    var s = null, g = 'other';
+    try { s = JSON.parse(raw); } catch (e) { /* unreadable */ }
+    ((s && Array.isArray(s.batches)) ? s.batches : []).some(function (b) {
+      var p = gidOf(String((b && b.sig) || '').split('|')[0]);
+      if (p) g = p;
+      return !!p;
+    });
     try {
-      var raw = localStorage.getItem(STORE_KEY) || '';
-      var sum = JSON.parse(localStorage.getItem(SUMMARY_KEY) || 'null');
+      var sum = localStorage.getItem(LEGACY_SUMMARY);
+      localStorage.setItem(stateKey(g), raw);
+      if (sum !== null) localStorage.setItem(summaryKey(g), sum);
+      localStorage.removeItem(LEGACY_STORE);
+      localStorage.removeItem(LEGACY_SUMMARY);
+    } catch (e) { return null; }
+    if (s && s.big) bigMove(BIG_LEGACY, g);
+    avMove('', g);
+    return g;
+  }
+  // Deletes giveaway g: lists, rules, prizes, winners, log, avatars and its IndexedDB copy.
+  function wipeGiveaway(g) {
+    try {
+      var sum = readJson(summaryKey(g));
       if (sum && !sum.sample && sum.people > 0) localStorage.setItem(USED_KEY, '1');
-      localStorage.removeItem(STORE_KEY);
-      localStorage.removeItem(SUMMARY_KEY);
-      if (raw.length < 200 && raw.indexOf('"big"') !== -1) bigWrite(null).catch(function () {});
+      localStorage.removeItem(stateKey(g));
+      localStorage.removeItem(summaryKey(g));
     } catch (e) { /* storage unavailable */ }
-    avClear();
+    bigWrite(g, null).catch(function () {});
+    avClear(g);
+  }
+  function wipeLegacy() {
+    try {
+      var sum = readJson(LEGACY_SUMMARY);
+      if (sum && !sum.sample && sum.people > 0) localStorage.setItem(USED_KEY, '1');
+      localStorage.removeItem(LEGACY_STORE);
+      localStorage.removeItem(LEGACY_SUMMARY);
+    } catch (e) { /* storage unavailable */ }
+    bigWrite(BIG_LEGACY, null).catch(function () {});
+    avMove('', null);
+  }
+  // Which giveaway a tab opens: the one in the address (?g=, as the 抓取工具 opens it), the one it
+  // showed before a reload, else the one changed last, else a new one.
+  function pickGid(before) {
+    var q = (location.search.match(/[?&]g=([a-z]+)/) || [])[1];
+    if (q && GID_LABEL[q]) return q;
+    return before || latestGid() || 'other';
+  }
+  function showGidInUrl() {
+    try { history.replaceState(null, '', location.pathname + (gid === 'other' ? '' : '?g=' + gid) + location.hash); } catch (e) { /* ignore */ }
   }
   function showSaveProblem(on) { $('#save-banner').hidden = !on; }
   var saveTimer = null;
@@ -1665,30 +1802,31 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     clearTimeout(saveTimer);
     saveTimer = null;
     if (loading) return;
+    var g = gid;
     var json = JSON.stringify(state);
-    var seq = ++saveSeq;
+    var seq = saveSeq[g] = (saveSeq[g] || 0) + 1;
     var fits = false;
-    try { localStorage.setItem(STORE_KEY, json); fits = true; } catch (e) { /* too big, or storage blocked */ }
+    try { localStorage.setItem(stateKey(g), json); fits = true; } catch (e) { /* too big, or storage blocked */ }
     if (fits) {
-      if (inBig || bigUsed) { inBig = false; bigUsed = false; bigWrite(null).catch(function () {}); }
+      if (inBig || bigUsed) { inBig = false; bigUsed = false; bigWrite(g, null).catch(function () {}); }
       showSaveProblem(false);
     } else {
       bigUsed = true;
-      bigWrite(json).then(function () {
-        if (seq !== saveSeq) return; // a newer save took over
-        localStorage.setItem(STORE_KEY, JSON.stringify({ v: 1, big: uid() }));
-        inBig = true;
-        showSaveProblem(false);
-      }).catch(function () { if (seq === saveSeq) showSaveProblem(true); });
+      bigWrite(g, json).then(function () {
+        if (seq !== saveSeq[g]) return; // a newer save took over
+        localStorage.setItem(stateKey(g), JSON.stringify({ v: 1, big: uid() }));
+        if (g === gid) { inBig = true; showSaveProblem(false); }
+      }).catch(function () { if (seq === saveSeq[g] && g === gid) showSaveProblem(true); });
     }
     try {
       var ev = lastEv || evaluate();
       if (!state.sample && ev.people.length) localStorage.setItem(USED_KEY, '1');
-      localStorage.setItem(SUMMARY_KEY, JSON.stringify({
-        at: Date.now(), sample: !!state.sample, people: ev.people.length, eligible: ev.eligibleCount,
+      localStorage.setItem(summaryKey(g), JSON.stringify({
+        at: Date.now(), gid: g, sample: !!state.sample, people: ev.people.length, eligible: ev.eligibleCount,
         drawn: state.winners.filter(function (w) { return !w.void; }).length, total: totalQty()
       }));
     } catch (e) { /* storage unavailable */ }
+    renderSwitcher();
   }
   function save() {
     if (loading) return;
@@ -1696,7 +1834,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     saveTimer = setTimeout(flush, 150);
   }
   window.addEventListener('pagehide', function () { if (saveTimer) flush(); });
-  // Show a giveaway that was saved elsewhere (another tab, or the IndexedDB copy at start).
+  // Show a giveaway that was saved elsewhere (another tab, an IndexedDB copy, or another giveaway).
   function useState(next) {
     clearTimeout(saveTimer);
     saveTimer = null;
@@ -1706,47 +1844,124 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     syncImportUI();
     renderPrizeEditor(true);
     renderAll();
-    avLoad().then(function () { renderAll(); });
+    renderSwitcher();
+    var g = gid;
+    avLoad().then(function () { if (g === gid) renderAll(); });
   }
-  // Takes the giveaway as saved now (raw: its JSON, null once deleted). During a draw this tab's
-  // result is saved next and wins.
+  // Takes the giveaway on screen as saved now (raw: its JSON, null once deleted). During a draw this
+  // tab's result is saved next and wins.
   function takeSaved(raw) {
     if (busy) return;
-    var s = null;
+    var s = null, g = gid;
     try { s = JSON.parse(raw || 'null'); } catch (err) { /* unreadable: start empty */ }
     if (s && s.v === 1 && s.big) {
-      bigRead().then(function (next) { if (next && !busy) { inBig = true; useState(next); } });
+      bigRead(g).then(function (next) { if (next && !busy && g === gid) { inBig = true; useState(next); } });
       return;
     }
     inBig = false;
     useState(s && s.v === 1 ? normalizeState(s) : makeEmpty());
   }
-  // The giveaway is open in another tab too: when that tab saves, take its data, so this tab
-  // never writes older data over it.
+  // Shows giveaway g in this tab, and calls `then` once it is there (a big one is read first).
+  function switchTo(g, then) {
+    if (saveTimer) flush();
+    gid = g;
+    hold(g);
+    showGidInUrl();
+    avatars.clear();
+    var next = loadGid(g);
+    if (next) { useState(next); if (then) then(); return; }
+    loading = true;
+    $('#loading').hidden = false;
+    bigRead(g).then(function (s) {
+      loading = false;
+      $('#loading').hidden = true;
+      if (g !== gid) return;
+      inBig = !!s;
+      useState(s || makeEmpty());
+      if (then) then();
+    });
+  }
+  // The giveaway on screen has no 抓取工具 list yet ('other'): it becomes platform p's giveaway. It is
+  // saved under p before 'other' goes, so another tab showing 'other' finds where it went.
+  function adopt(p) {
+    var from = gid;
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    gid = p;
+    hold(p);
+    showGidInUrl();
+    inBig = false;
+    bigUsed = false;
+    if (!state.sample) flush();
+    try { localStorage.removeItem(stateKey(from)); localStorage.removeItem(summaryKey(from)); } catch (e) { /* storage unavailable */ }
+    bigWrite(from, null).catch(function () {});
+    avMove(from, p);
+    renderSwitcher();
+  }
+  // The giveaway on screen was deleted in another tab: 'other' went to its platform (show that one),
+  // anything else was cleared there (show it empty).
+  function followAway() {
+    if (busy) return;
+    var g = gid === 'other' ? latestGid() : null;
+    if (g && g !== gid) { switchTo(g); return; }
+    inBig = false;
+    useState(makeEmpty());
+  }
+  // The giveaway is open in another tab too: when that tab saves, take its data, so this tab never
+  // writes older data over it. Other giveaways only change the switcher's numbers.
   window.addEventListener('storage', function (e) {
-    if (e.storageArea !== localStorage || (e.key !== STORE_KEY && e.key !== null)) return;
-    takeSaved(e.key === null ? null : e.newValue);
+    if (e.storageArea !== localStorage) return;
+    if (e.key === null) { takeSaved(null); return; }
+    if (e.key === stateKey(gid)) {
+      if (e.newValue === null) followAway();
+      else takeSaved(e.newValue);
+      return;
+    }
+    if (e.key.indexOf(SUMMARY_PREFIX) === 0) renderSwitcher();
   });
   // Back from the back-forward cache: meanwhile another tab may have changed the giveaway, or deleted
   // it (關掉分頁就清除), and this page did not hear of it. Take what is saved now.
   window.addEventListener('pageshow', function (e) {
     if (!e.persisted) return;
     var raw;
-    try { raw = localStorage.getItem(STORE_KEY); } catch (err) { return; }
+    try { raw = localStorage.getItem(stateKey(gid)); } catch (err) { return; }
     if (raw === null && state && state.sample) return;  // the sample is only saved once it is changed
     takeSaved(raw);
   });
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden' && saveTimer) flush(); });
+
+  // ---------- Switching giveaways ----------
+  // The giveaways saved in this browser, as buttons that switch this tab between them (shown once
+  // there are two). The tab's title says which one it shows, to tell the tabs apart.
+  function renderSwitcher() {
+    if (!state) return;
+    document.title = (gid === 'other' ? '開始抽獎' : GID_LABEL[gid] + ' 抽獎') + '｜抽獎系統';
+    // The sample someone tried in another tab is not one of their giveaways
+    var list = GIDS.filter(function (g) { return g === gid || (savedExists(g) && !(readJson(summaryKey(g)) || {}).sample); });
+    var box = $('#gsw');
+    box.hidden = list.length < 2;
+    if (box.hidden) return;
+    $('#gsw-list').replaceChildren.apply($('#gsw-list'), list.map(function (g) {
+      var s = g === gid ? null : readJson(summaryKey(g));
+      var n = g === gid ? (lastEv || evaluate()).people.length : (s && s.people) || 0;
+      return el('button', { type: 'button', class: 'gsw-btn', 'aria-pressed': g === gid ? 'true' : 'false', 'data-g': g },
+        g === gid && state.sample ? '範例' : GID_LABEL[g], el('small', null, n + ' 位'));
+    }));
+  }
   function addLog(kind, text) {
     state.log.push({ at: Date.now(), kind: kind, text: text });
     if (state.log.length > 2000) state.log.splice(0, state.log.length - 2000);
   }
 
   // ---------- Avatars ----------
-  // Thumbnails from the 抓取工具 live in IndexedDB (too big for localStorage), keyed like people:
-  // the normalised handle, or the name when there is no handle. Without storage they last until reload.
+  // Thumbnails from the 抓取工具 live in IndexedDB (too big for localStorage), keyed by giveaway and
+  // like people: "<giveaway id>\n<the normalised handle, or the name when there is no handle>". The
+  // map holds the ones of the giveaway on screen, by the person's key. Without storage they last
+  // until reload. An older version kept them without the giveaway id.
   var avatars = new Map();
-  var AV_DB = 'giveaway-draw-avatars', AV_STORE = 'avatars';
+  var AV_DB = 'giveaway-draw-avatars', AV_STORE = 'avatars', AV_SEP = '\n';
+  function avKey(g, k) { return g + AV_SEP + k; }
+  function avRange(g) { return IDBKeyRange.bound(g + AV_SEP, g + AV_SEP + '￿'); }
   var avReady = new Promise(function (resolve) {
     try {
       var req = indexedDB.open(AV_DB, 1);
@@ -1763,15 +1978,17 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     });
   }
   function avLoad() {
+    var g = gid;
     return avReady.then(function (db) {
       if (!db) return null;
       return new Promise(function (resolve) {
         try {
-          var req = db.transaction(AV_STORE, 'readonly').objectStore(AV_STORE).openCursor();
+          var req = db.transaction(AV_STORE, 'readonly').objectStore(AV_STORE).openCursor(avRange(g));
           req.onsuccess = function () {
             var c = req.result;
             if (!c) { resolve(); return; }
-            if (!avatars.has(c.key)) avatars.set(c.key, c.value);
+            var k = String(c.key).slice(g.length + 1);
+            if (g === gid && !avatars.has(k)) avatars.set(k, c.value);
             c.continue();
           };
           req.onerror = function () { resolve(); };
@@ -1781,17 +1998,36 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
   }
   function avPut(map) {
     if (!map || !map.size) return;
+    var g = gid;
     map.forEach(function (v, k) { avatars.set(k, v); });
-    avTx(function (st) { map.forEach(function (v, k) { st.put(v, k); }); });
+    avTx(function (st) { map.forEach(function (v, k) { st.put(v, avKey(g, k)); }); });
   }
-  function avClear() {
-    avatars.clear();
-    avTx(function (st) { st.clear(); });
+  function avClear(g) {
+    if (g === gid) avatars.clear();
+    avTx(function (st) { st.delete(avRange(g)); });
   }
-  // Forget pictures of people who are no longer in any list.
+  // Gives the pictures kept for giveaway `from` ('' for an older version's) to giveaway `to`, or
+  // deletes them when `to` is null.
+  function avMove(from, to) {
+    avTx(function (st) {
+      var req = st.openCursor();
+      req.onsuccess = function () {
+        var c = req.result;
+        if (!c) return;
+        var k = String(c.key);
+        var rest = from ? (k.indexOf(from + AV_SEP) === 0 ? k.slice(from.length + 1) : null) : (k.indexOf(AV_SEP) === -1 ? k : null);
+        if (rest !== null) {
+          if (to) st.put(c.value, avKey(to, rest));
+          c.delete();
+        }
+        c.continue();
+      };
+    });
+  }
+  // Forget pictures of people who are no longer in any list of the giveaway on screen.
   function avGc() {
     if (!avatars.size) return;
-    var live = new Set();
+    var g = gid, live = new Set();
     function add(name, handle) { if (handle) live.add(normKey(handle)); live.add(normKey(name)); }
     state.batches.forEach(function (b) { b.records.forEach(function (r) { add(r.name, r.handle); }); });
     state.winners.forEach(function (w) { add(w.name, w.handle); });
@@ -1799,7 +2035,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     avatars.forEach(function (v, k) { if (!live.has(k)) dead.push(k); });
     if (!dead.length) return;
     dead.forEach(function (k) { avatars.delete(k); });
-    avTx(function (st) { dead.forEach(function (k) { st.delete(k); }); });
+    avTx(function (st) { dead.forEach(function (k) { st.delete(avKey(g, k)); }); });
   }
   function avatarOf(p) {
     if (!avatars.size || !p) return null;
@@ -2744,25 +2980,48 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     var col = parseCollected(text);
     if (!col) {
       showRecv('warn', '收到的名單讀不懂。', '請回到貼文的分頁，按抓取工具上的「複製結果」，再貼到第 1 步「送不過去的話」的框。');
-      return { ok: false, msg: '抽獎系統讀不懂這份結果，請改用「複製結果」貼上。' };
+      return Promise.resolve({ ok: false, msg: '抽獎系統讀不懂這份結果，請改用「複製結果」貼上。' });
     }
     return takeResult(col, '送出');
   }
-  // A 抓取工具 result, sent or pasted: added unless the draw has started, and the banner says what
-  // happened and what to do next.
+  // A 抓取工具 result, sent, pasted or opened as a file: it goes to the giveaway of its platform, which
+  // this tab then shows (a giveaway with no 抓取工具 list yet becomes that platform's). Added unless
+  // that giveaway's draw has started, and the banner says what happened and what to do next.
+  // Resolves to { ok, msg } for the 抓取工具's answer.
   function takeResult(col, how) {
     var what = col.platform + ' 的' + TYPE_LABEL[col.kind] + '名單';
-    if (state.winners.length || busy) {
-      var why = busy ? '抽獎系統正在抽獎，等抽完再按一次「送到抽獎系統」。'
-        : '抽獎已經開始，名單鎖住了，所以沒有加入。要加名單，請先在抽獎系統的得獎名單下面按「重新開始抽獎」。';
-      showRecv('warn', '沒有加入 ' + what + '。', why);
-      return { ok: false, msg: why };
+    if (busy) {
+      var wait = '抽獎系統正在抽獎，等抽完再按一次「送到抽獎系統」。';
+      showRecv('warn', '沒有加入 ' + what + '。', wait);
+      return Promise.resolve({ ok: false, msg: wait });
     }
-    var r = addCollected(col, how);
-    if (!r.ok) { showRecv('warn', '沒有加入 ' + what + '。', r.msg); return r; }
-    showRecv('ok', (how === '送出' ? '已收到 ' : '已貼上 ') + what + '：' + (r.added || r.msg), (r.rules ? r.rules + '，不需要的話可以取消。' : '') + nextHint());
-    if (currentView() !== 'setup') goView('setup');
-    return r;
+    var from = gid, to = col.gid || gid;
+    // Names typed or imported before the first list of a site become that site's giveaway
+    var adopting = to !== from && from === 'other' && !savedExists(to) && !state.winners.length;
+    // This tab showed another giveaway with lists in it: say where the list went and that it is still there
+    var left = to !== from && !adopting && state.batches.length > 0 && !state.sample ? from : '';
+    return new Promise(function (resolve) {
+      function add() {
+        if (state.winners.length) {
+          var why = '抽獎已經開始，名單鎖住了，所以沒有加入。要加名單，請先在抽獎系統的得獎名單下面按「重新開始抽獎」。';
+          showRecv('warn', '沒有加入 ' + what + '。', why);
+          resolve({ ok: false, msg: why });
+          return;
+        }
+        var r = addCollected(col, how);
+        // From the 手動貼上 box or a file the toast says it, unless the list went to another giveaway
+        var quiet = (how === '貼上' || how === '檔案') && !left;
+        if (!r.ok) { if (!quiet) showRecv('warn', '沒有加入 ' + what + '。', r.msg); resolve(r); return; }
+        var moved = left ? '這份放進 ' + gidName(gid) + '，' + gidName(left) + '還在，用上面「你的抽獎」的按鈕切換。' : '';
+        if (!quiet) showRecv('ok', ({ '送出': '已收到 ', '檔案': '已匯入 ' }[how] || '已貼上 ') + what + '：' + (r.added || r.msg),
+          moved + (r.rules ? r.rules + '，不需要的話可以取消。' : '') + nextHint());
+        if (currentView() !== 'setup') goView('setup');
+        resolve(r);
+      }
+      if (to === from) add();
+      else if (adopting) { adopt(to); add(); }
+      else switchTo(to, add);
+    });
   }
   // The 「複製結果」 of the 抓取工具, pasted in the 送不過去的話 box or anywhere on the page. Anything
   // else pasted in that box goes to the 手動貼上 box below, opened, to be checked and added there.
@@ -2808,8 +3067,8 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     if (d.type !== 'send' || typeof d.text !== 'string') return;
     // After the IndexedDB copy of a big giveaway is read at start
     ready.then(function () {
-      if (!recvDone[d.id]) { recvDone[d.id] = receive(d.text); recvDone[d.id].type = 'ack'; }
-      answer(recvDone[d.id]);
+      if (!recvDone[d.id]) recvDone[d.id] = receive(d.text);
+      recvDone[d.id].then(function (r) { answer({ type: 'ack', ok: r.ok, msg: r.msg }); });
     });
   });
 
@@ -2853,7 +3112,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
 
     $('#btn-add').addEventListener('click', function () {
       var col = currentCollected();
-      if (col) { addCollected(col, '貼上'); return; }
+      if (col) { takeResult(col, '貼上'); return; }
       var type = state.ui.importType;
       var recs = parsePaste($('#paste').value, type);
       if (!recs.length) { toast('沒有讀到名字，請每行貼上一位'); return; }
@@ -2879,7 +3138,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
         var dec = decodeFile(buf);
         var text = dec.text.replace(/^\uFEFF/, '');
         var col = parseCollected(text);
-        if (col) { addCollected(col, '檔案'); return; }
+        if (col) { takeResult(col, '檔案'); return; }
         var type = state.ui.importType;
         var firstLine = text.split(/\r?\n/)[0] || '';
         // A table: CSV / TSV, or a .txt with tabs (Excel's 「Unicode 文字」 is tab-separated, with a header row)
@@ -3072,30 +3331,41 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     });
     $('#btn-wipe').addEventListener('click', function () {
       if (busy) return;
+      var which = gid === 'other' ? '' : GID_LABEL[gid] + ' 抽獎的';
       ask({
-        title: '清除全部資料？',
-        text: '名單、參加條件、獎品、得獎名單和抽獎紀錄都會刪除，無法復原。' + (state.winners.length ? KEEP_CSV : ''),
+        title: '清除' + (which ? ' ' + which : '') + '全部資料？',
+        text: (which ? '這場' : '') + '名單、參加條件、獎品、得獎名單和抽獎紀錄都會刪除，無法復原。' + (state.winners.length ? KEEP_CSV : ''),
         ok: '清除全部',
         action: function () {
           if (busy) return;
           var anim = state.ui.anim;
+          clearTimeout(saveTimer);
+          saveTimer = null;
+          wipeGiveaway(gid);
+          inBig = false;
+          bigUsed = false;
           state = makeEmpty();
           state.ui.anim = anim;
-          avClear();
           pending = null;
           $('#paste').value = '';
           syncRuleInputs();
           syncImportUI();
           renderPrizeEditor(true);
           $('#copy-box').hidden = true;
-          save();
           renderAll();
+          renderSwitcher();
           goView('setup');
-          toast('已清除全部資料，從第 1 步匯入新的名單');
+          toast('已清除' + (which ? ' ' + which : '') + '全部資料，從第 1 步匯入新的名單');
         }
       });
     });
     $('#btn-recv-ok').addEventListener('click', function () { showRecv(''); });
+    $('#gsw-list').addEventListener('click', function (e) {
+      var b = e.target.closest('.gsw-btn');
+      if (!b || busy || loading || b.dataset.g === gid) return;
+      showRecv('');
+      switchTo(b.dataset.g, function () { toast('現在顯示' + (gid === 'other' ? '' : ' ') + gidName(gid)); });
+    });
     $('#btn-tool-ok').addEventListener('click', function () {
       state.ui.oldTool = null;
       save();
@@ -3116,9 +3386,11 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     window.addEventListener('hashchange', function () { takeReceiveHash(); showView(true); });
   }
 
-  // The last tab with the saved giveaway was closed: start over
-  if (joinTabs()) wipeSaved();
-  state = load();
+  // Before anything shows: forget the giveaways of closed tabs, then show this tab's
+  gid = pickGid(joinTabs());
+  hold(gid);
+  showGidInUrl();
+  state = loadGid(gid);
   if (!state) {
     // A big giveaway saved in IndexedDB: cover the page until it is read
     state = makeEmpty();
@@ -3132,10 +3404,11 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
   syncImportUI();
   renderPrizeEditor(true);
   renderAll();
+  renderSwitcher();
   takeReceiveHash();
   showView(false);
   $('#foot-ver').textContent = 'v' + COLLECTOR_VERSION;
-  var ready = !loading ? Promise.resolve() : bigRead().then(function (next) {
+  var ready = !loading ? Promise.resolve() : bigRead(gid).then(function (next) {
     loading = false;
     $('#loading').hidden = true;
     if (next) {

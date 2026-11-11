@@ -152,7 +152,8 @@ const sample = (name) => {
   await page.fill('#paste', xJson);
   await page.click('#btn-add');
   await page.waitForTimeout(150);
-  check(await txt('#s-people') === String(22 + 33) && await page.isHidden('#tool-banner'), 'draw: X replies added, newest-tool result clears the banner');
+  check(/draw\.html\?g=x(#setup)?$/.test(page.url()) && await txt('#s-people') === '33' && await page.isHidden('#tool-banner') && (await txt('#recv-text')).startsWith('這份放進 X 的抽獎，Facebook 的抽獎還在'),
+    'draw: X replies go to an X giveaway of their own, without the Facebook update banner, and the page says so (' + page.url() + ')');
   // 排除 on an X reply writes the @handle (unique on X) into the exclusion list
   const u1 = page.locator('#people .person', { has: page.locator('.handle', { hasText: /^@user_1$/ }) });
   const before = await txt('#s-eligible');
@@ -183,13 +184,14 @@ const sample = (name) => {
   await home2.goto(SITE);
   await home2.waitForTimeout(300);
   const resume = await home2.$eval('#resume-text', n => n.textContent);
-  check(await home2.isVisible('#resume') && /^參加者 55 位，全部 1 名都抽完了/.test(resume) && await home2.$eval('#cta-draw', a => a.textContent) === '查看抽獎結果', 'home: returning visitor sees last giveaway (' + resume.slice(0, 30) + ')');
-  check((await ctas(home2)).join('|') === 'cta-draw* 查看抽獎結果 draw.html|cta-start 看使用教學 #use' && await home2.isVisible('#whats-new') && await home2.isVisible('#meta-new'), 'home: a returning visitor gets 繼續 first and the 更新了 box ' + JSON.stringify(await ctas(home2)));
+  check(await home2.isVisible('#resume') && await home2.$eval('#resume-title', n => n.textContent) === '你有 2 場抽獎還開著' && /^X：參加者 33 位，全部 1 名都抽完了.*；Facebook：參加者 22 位，還沒開始抽/.test(resume),
+    'home: returning visitor sees both giveaways, the latest first (' + resume.slice(0, 60) + ')');
+  check((await ctas(home2)).join('|') === 'cta-draw* 繼續抽獎 draw.html|cta-start 看使用教學 #use' && await home2.isVisible('#whats-new') && await home2.isVisible('#meta-new'), 'home: a returning visitor gets 繼續 first and the 更新了 box ' + JSON.stringify(await ctas(home2)));
   // Start the draw over in the draw tab: the homepage line follows without reloading
   await page.click('#btn-reset'); await page.click('#confirm-ok');
   await page.waitForTimeout(500);
   const resume2 = await home2.$eval('#resume-text', n => n.textContent);
-  check(/^參加者 55 位，還沒開始抽/.test(resume2) && await home2.$eval('#cta-draw', a => a.textContent) === '繼續抽獎', 'home: 繼續抽獎 line updates live from the draw tab (' + resume2.slice(0, 20) + ')');
+  check(/^X：參加者 33 位，還沒開始抽/.test(resume2) && await home2.$eval('#cta-draw', a => a.textContent) === '繼續抽獎', 'home: the line updates live from the draw tab (' + resume2.slice(0, 20) + ')');
   await home2.screenshot({ path: path.join(OUT, 'shot-home-returning.png') });
   await home2.close();
 
@@ -216,7 +218,7 @@ const sample = (name) => {
   // A crafted result cannot sneak in script links or non-image data
   await page.click('.view-tab[data-view="draw"]');
   await page.click('#btn-wipe');
-  check((await page.textContent('#confirm-title')) === '清除全部資料？' && (await page.textContent('#confirm-text')).includes('無法復原'), 'draw: 清除全部資料 asks in a dialog first');
+  check((await page.textContent('#confirm-title')) === '清除 X 抽獎的全部資料？' && (await page.textContent('#confirm-text')).startsWith('這場名單') && (await page.textContent('#confirm-text')).includes('無法復原'), 'draw: 清除全部資料 asks in a dialog first, naming the giveaway');
   await page.click('#confirm-ok');
   await page.waitForTimeout(200);
   check(page.url().endsWith('#setup') && await page.isVisible('#import-how'), 'draw: 清除全部資料 goes back to 準備');

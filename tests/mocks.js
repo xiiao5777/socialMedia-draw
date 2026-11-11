@@ -326,6 +326,31 @@ function thPostPage() {
   </script></body></html>`;
 }
 
+// The author answers most replies. The post's number (12) counts the replies to the post only, not
+// the author's answers to them, and the last replies load after a pause.
+function thOwnerPage() {
+  const items = [];
+  for (let i = 0; i < 12; i++) {
+    items.push({ id: 'Q' + i, user: 'fan.' + i, text: '我要抽' });
+    if (i < 10) items.push({ id: 'A' + i, user: 'brandtw', text: '已登記', author: true });
+  }
+  return `<!doctype html><html><head>${common}</head><body>
+  <div id="feed"></div>
+  <script>
+    window.__thPost = ${thPost.toString()};
+    const main = { id: 'DOwner1', user: 'brandtw', text: '留言抽獎！', author: true, replies: 12 };
+    const items = ${JSON.stringify(items)};
+    let loaded = 6, waiting = false;
+    function draw() { document.getElementById('feed').innerHTML = __thPost(main) + items.slice(0, loaded).map(__thPost).join(''); }
+    draw();
+    window.addEventListener('scroll', () => {
+      if (waiting || loaded >= items.length || window.scrollY + innerHeight <= document.body.scrollHeight - 200) return;
+      waiting = true;
+      setTimeout(() => { loaded = Math.min(items.length, loaded + 5); waiting = false; draw(); }, loaded >= 16 ? 4000 : 250);
+    });
+  </script></body></html>`;
+}
+
 function thLikesPage() {
   const rows = Array.from({ length: 12 }, (_, i) => `<div style="height:56px"><a href="/@fan_${i}" tabindex="-1"><img width="30" height="30" src="https://scontent-tpe1-1.cdninstagram.com/v/t51.2885-19/fan_${i}_nocors_n.jpg"></a> <a href="/@fan_${i}"><span dir="auto">fan_${i}</span></a> <span>粉絲 ${i}</span> <div role="button">追蹤</div></div>`).join('');
   return `<!doctype html><html><head>${common}</head><body>
@@ -350,5 +375,6 @@ module.exports = {
   'https://x.com/brand/status/111/likes': xLikesPage,
   'https://www.threads.com/@brandtw/post/DAbc123': thPostPage,
   'https://www.threads.com/@brandtw/post/DAbc123/likes': thLikesPage,
+  'https://www.threads.com/@brandtw/post/DOwner1': thOwnerPage,
   'https://example.com/': otherPage
 };

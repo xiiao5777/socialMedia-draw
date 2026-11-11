@@ -1,6 +1,7 @@
 // Draw page with real-world lists: people who share a name, CSV files saved by Excel in Big5 / GBK,
 // a giveaway too big for localStorage (kept in IndexedDB instead, or a warning when it can't be kept),
-// and the page opened by 送到抽獎系統 when no list arrives.
+// the page opened by 送到抽獎系統 when no list arrives, a giveaway that lasts while a tab has it open,
+// and one giveaway per platform.
 const { SITE, launch, serveSite, check, done, pasteInto, version } = require('./helpers');
 
 const url = SITE + 'draw.html';
@@ -113,7 +114,7 @@ function bigList(n) {
   await pasteInto(page, '#paste', bigList(16000));
   await page.click('#btn-add');
   await page.waitForTimeout(2500);
-  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('giveaway-draw:v1')));
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('giveaway-draw:v1:facebook')));
   check(await txt(page, '#s-people') === '16000' && saved && saved.v === 1 && !!saved.big && await page.isHidden('#save-banner'), '16,000 comments go to IndexedDB, localStorage keeps a note ' + JSON.stringify(saved).slice(0, 60));
   // Typing a keyword with a big list: the counts follow once the typing pauses
   await page.type('#r-kw-text', '想要', { delay: 30 });
@@ -141,11 +142,18 @@ function bigList(n) {
   await page.click('#btn-wipe'); await page.click('#confirm-ok');
   await page.waitForTimeout(800);
   const after = await page.evaluate(() => new Promise(resolve => {
-    const s = JSON.parse(localStorage.getItem('giveaway-draw:v1'));
+    const s = localStorage.getItem('giveaway-draw:v1:facebook');
     const req = indexedDB.open('giveaway-draw-state');
-    req.onsuccess = () => { const g = req.result.transaction('state').objectStore('state').get('state'); g.onsuccess = () => resolve({ big: !!s.big, batches: (s.batches || []).length, idb: g.result === undefined ? 'gone' : 'still there' }); };
+    req.onsuccess = () => { const g = req.result.transaction('state').objectStore('state').get('facebook'); g.onsuccess = () => resolve({ saved: s === null ? 'gone' : 'still there', idb: g.result === undefined ? 'gone' : 'still there' }); };
   }));
-  check(!after.big && after.batches === 0 && after.idb === 'gone', '清除全部資料 saves to localStorage again and deletes the IndexedDB copy ' + JSON.stringify(after));
+  check(after.saved === 'gone' && after.idb === 'gone' && await txt(page, '#s-people') === '0' && (await txt(page, '#toast')).startsWith('已清除 Facebook 抽獎的全部資料'),
+    '清除全部資料 deletes the Facebook giveaway, its IndexedDB copy included ' + JSON.stringify(after));
+  // Adding to it again saves to localStorage, as a small giveaway
+  await page.click('.view-tab[data-view="setup"]');
+  await pasteInto(page, 'body', result('comment', [{ name: 'Amy', handle: 'fb:1', text: 'hi' }]));
+  await page.waitForTimeout(800);
+  const again = await page.evaluate(() => JSON.parse(localStorage.getItem('giveaway-draw:v1:facebook')));
+  check(again && !again.big && again.batches.length === 1, 'a list added after that is saved in localStorage again');
 
   // ---------- Nowhere to keep it: say so ----------
   const ctx2 = await browser.newContext({ viewport: { width: 1280, height: 900 } });
@@ -252,8 +260,8 @@ function bigList(n) {
     r1.onsuccess = () => {
       const db = r1.result;
       if (!db.objectStoreNames.contains('state')) { out.big = 'none'; avs(); return; }
-      const g = db.transaction('state').objectStore('state').get('state');
-      g.onsuccess = () => { out.big = g.result === undefined ? 'none' : 'saved'; avs(); };
+      const g = db.transaction('state').objectStore('state').count();
+      g.onsuccess = () => { out.big = g.result ? 'saved' : 'none'; avs(); };
     };
     function avs() {
       const r2 = indexedDB.open('giveaway-draw-avatars');
@@ -325,40 +333,132 @@ function bigList(n) {
   // A tab that is asleep (still listed) keeps it; one not heard from for 12 hours does not
   await pasteInto(t3, 'body', result('comment', [{ name: 'Ben', handle: 'fb:ben', text: 'hi' }]));
   await t3.waitForTimeout(300);
-  await t3.evaluate(() => localStorage.setItem('giveaway-draw:open:asleep', String(Date.now())));
+  await t3.evaluate(() => localStorage.setItem('giveaway-draw:open:asleep', Date.now() + '|facebook'));
   await t3.close();
   const t4 = await ctx5.newPage();
   watch(t4, 'tab4');
   await t4.goto(url);
   await t4.waitForTimeout(500);
   check(await txt(t4, '#s-people') === '1', 'a tab still listed (asleep in the background) keeps the giveaway');
-  await t4.evaluate(() => localStorage.setItem('giveaway-draw:open:asleep', String(Date.now() - 13 * 3600 * 1000)));
+  await t4.evaluate(() => localStorage.setItem('giveaway-draw:open:asleep', (Date.now() - 13 * 3600 * 1000) + '|facebook'));
   await t4.close();
   const t5 = await ctx5.newPage();
   watch(t5, 'tab5');
   await t5.goto(url);
   await t5.waitForTimeout(500);
   check(await txt(t5, '#s-people') === '0' && await t5.evaluate(() => localStorage.getItem('giveaway-draw:open:asleep')) === null, 'a tab not heard from for 12 hours is forgotten, and the giveaway with it');
-  // A tab opened before this version has neither the note nor a listing: a reload still keeps its giveaway
-  await pasteInto(t5, 'body', result('comment', [{ name: 'Cy', handle: 'fb:cy', text: 'hi' }]));
+  // A tab opened before this version has neither the note nor a listing, and its giveaway is in the
+  // old place: a reload still keeps it, as the giveaway of its list's platform
+  await pasteInto(t5, 'body', result('comment', [{ name: 'Cy', handle: 'fb:cy', text: 'hi' }], { avatars: { 'fb:cy': 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==' } }));
   await t5.waitForTimeout(500);
-  await t5.evaluate(() => {
+  await t5.evaluate(() => new Promise(resolve => {
     sessionStorage.clear();
     Object.keys(localStorage).filter(k => k.startsWith('giveaway-draw:open:')).forEach(k => localStorage.removeItem(k));
-  });
+    for (const [from, to] of [['giveaway-draw:v1:facebook', 'giveaway-draw:v1'], ['giveaway-draw:summary:facebook', 'giveaway-draw:summary']]) {
+      const sum = JSON.parse(localStorage.getItem(from));
+      delete sum.gid;
+      localStorage.setItem(to, JSON.stringify(sum));
+      localStorage.removeItem(from);
+    }
+    history.replaceState(null, '', location.pathname);
+    // The older version kept avatars without the giveaway id
+    const r = indexedDB.open('giveaway-draw-avatars');
+    r.onsuccess = () => {
+      const tx = r.result.transaction('avatars', 'readwrite'), st = tx.objectStore('avatars');
+      const g = st.get('facebook\nfb:cy');
+      g.onsuccess = () => { st.delete('facebook\nfb:cy'); st.put(g.result, 'fb:cy'); };
+      tx.oncomplete = () => resolve();
+    };
+  }));
   await t5.reload();
-  await t5.waitForTimeout(500);
-  check(await txt(t5, '#s-people') === '1' && await openCount(t5) === 1, 'a reload keeps the giveaway, even in a tab opened before this version');
+  await t5.waitForTimeout(800);
+  const moved = await t5.evaluate(() => ({ url: location.search, old: localStorage.getItem('giveaway-draw:v1'), now: !!localStorage.getItem('giveaway-draw:v1:facebook'), av: !!document.querySelector('#people .person img') }));
+  check(await txt(t5, '#s-people') === '1' && await openCount(t5) === 1 && moved.url === '?g=facebook' && moved.old === null && moved.now && moved.av,
+    'a reload keeps the giveaway of a tab opened before this version, moved to the Facebook giveaway with its avatar ' + JSON.stringify(moved));
   // Back from the back-forward cache, the page shows what is saved now: unchanged, or deleted meanwhile by a new tab
   const backFromCache = () => t5.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
   await backFromCache();
   await t5.waitForTimeout(300);
   const kept = await txt(t5, '#s-people');
-  await t5.evaluate(() => localStorage.removeItem('giveaway-draw:v1'));
+  await t5.evaluate(() => localStorage.removeItem('giveaway-draw:v1:facebook'));
   await backFromCache();
   await t5.waitForTimeout(300);
   check(kept === '1' && await txt(t5, '#s-people') === '0', 'back from the back-forward cache, a page shows the giveaway as saved now (' + kept + ', then deleted)');
   await ctx5.close();
+
+  // ---------- One giveaway per platform, each in its own tab ----------
+  const ctx6 = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await serveSite(ctx6);
+  const ticksOf = (p) => p.evaluate(() => ['r-comment', 'r-like', 'r-share'].map(id => document.getElementById(id).checked ? '1' : '0').join(''));
+  const switcher = async (p) => await p.isHidden('#gsw') ? 'hidden' : (await p.$$eval('#gsw .gsw-btn', bs => bs.map(b => b.textContent + (b.getAttribute('aria-pressed') === 'true' ? '*' : '')))).join(' ');
+  const xList = (kind, items) => result(kind, items, { platform: 'x', page: 'https://x.com/brand/status/1' });
+  const fb = await ctx6.newPage();
+  watch(fb, 'fb-tab');
+  await fb.goto(url + '#setup');
+  await fb.waitForTimeout(300);
+  await pasteInto(fb, 'body', result('comment', [{ name: 'Amy', handle: 'fb:1', text: '我要抽' }, { name: 'Ben', handle: 'fb:2', text: '我要抽' }]));
+  await fb.waitForTimeout(300);
+  check(fb.url() === url + '?g=facebook#setup' && await fb.title() === 'Facebook 抽獎｜抽獎系統' && await txt(fb, '#s-people') === '2' && await switcher(fb) === 'hidden',
+    'a Facebook list makes the tab the Facebook giveaway (' + fb.url() + ')');
+  // The tab 送到抽獎系統 opens for X: its own giveaway, next to the Facebook one
+  const xt = await ctx6.newPage();
+  watch(xt, 'x-tab');
+  await xt.goto(url + '?g=x#setup');
+  await xt.waitForTimeout(500);
+  check(await xt.title() === 'X 抽獎｜抽獎系統' && await txt(xt, '#s-people') === '0' && await xt.isHidden('#sample-banner') && await switcher(xt) === 'Facebook2 位 X0 位*',
+    'a tab opened for X shows an empty X giveaway, and the switcher lists the Facebook one (' + await switcher(xt) + ')');
+  await pasteInto(xt, 'body', xList('like', [{ name: 'Cat', handle: '@cat' }, { name: 'Dan', handle: '@dan' }, { name: 'Eve', handle: '@eve' }]));
+  await xt.waitForTimeout(500);
+  check(await txt(xt, '#s-people') === '3' && await ticksOf(xt) === '010' && await txt(fb, '#s-people') === '2' && await ticksOf(fb) === '100',
+    'each giveaway has its own lists and rules (X ' + await ticksOf(xt) + ', Facebook ' + await ticksOf(fb) + ')');
+  check(await switcher(fb) === 'Facebook2 位* X3 位', 'the Facebook tab lists the X giveaway once it has people (' + await switcher(fb) + ')');
+  // Drawing in one does not lock the other
+  await fb.click('.view-tab[data-view="draw"]');
+  await fb.click('label.switch');
+  await fb.click('#btn-draw');
+  await fb.waitForTimeout(2500);
+  await pasteInto(xt, 'body', xList('comment', [{ name: 'Cat', handle: '@cat', text: 'me' }]));
+  await xt.waitForTimeout(500);
+  check((await txt(fb, '#s-drawn')).startsWith('1 /') && await xt.locator('#batches .batch').count() === 2 && await ticksOf(xt) === '110' && (await txt(xt, '#s-drawn')).startsWith('0 /'),
+    'with a Facebook winner drawn, the X giveaway still takes lists (' + await txt(fb, '#s-drawn') + ')');
+  // The homepage lists both
+  const home6 = await ctx6.newPage();
+  watch(home6, 'home-two');
+  await home6.goto(SITE);
+  await home6.waitForTimeout(300);
+  const rt = await txt(home6, '#resume-text');
+  check(await txt(home6, '#resume-title') === '你有 2 場抽獎還開著' && /^X：參加者 3 位，還沒開始抽.*；Facebook：參加者 2 位，/.test(rt) && rt.endsWith('每個平台各一場，關掉那場的分頁，那場就會清除。'),
+    'the homepage lists both giveaways, the latest first: ' + rt);
+  await home6.close();
+  // Closing the X tab: the homepage lists the Facebook giveaway only, and the next draw tab deletes the X one
+  await xt.close();
+  const home7 = await ctx6.newPage();
+  watch(home7, 'home-one');
+  await home7.goto(SITE);
+  await home7.waitForTimeout(300);
+  const rt7 = await txt(home7, '#resume-text');
+  check(await txt(home7, '#resume-title') === '你的抽獎還開著' && /^Facebook：參加者 2 位，全部 1 名都抽完了.*。關掉所有抽獎系統的分頁，這場抽獎就會清除。$/.test(rt7) && await txt(home7, '#cta-draw') === '查看抽獎結果',
+    'with the X tab closed, the homepage lists the Facebook giveaway, all drawn: ' + rt7);
+  await home7.close();
+  const nt = await ctx6.newPage();
+  watch(nt, 'next-tab');
+  await nt.goto(url);
+  await nt.waitForTimeout(800);
+  check(await nt.title() === 'Facebook 抽獎｜抽獎系統' && (await txt(nt, '#s-drawn')).startsWith('1 /') && await nt.evaluate(() => localStorage.getItem('giveaway-draw:v1:x')) === null && await switcher(nt) === 'hidden' && await switcher(fb) === 'hidden',
+    'after the X tab is closed, a new tab deletes the X giveaway and shows the Facebook one, still open in its tab');
+  await nt.close();
+  // An X list pasted in the Facebook tab (which has a winner) goes to a new X giveaway: the tab says so
+  await fb.click('.view-tab[data-view="setup"]');
+  await pasteInto(fb, 'body', xList('share', [{ name: 'Dan', handle: '@dan' }]));
+  await fb.waitForTimeout(500);
+  check(fb.url() === url + '?g=x#setup' && await fb.title() === 'X 抽獎｜抽獎系統' && await txt(fb, '#s-people') === '1' && await ticksOf(fb) === '001' && await switcher(fb) === 'Facebook2 位 X1 位*',
+    'an X list pasted in the Facebook tab starts the X giveaway there (' + fb.url() + ')');
+  check((await txt(fb, '#recv-text')).startsWith('這份放進 X 的抽獎，Facebook 的抽獎還在，用上面「你的抽獎」的按鈕切換。'), 'the banner says where it went and that the Facebook giveaway is still there: ' + await txt(fb, '#recv-text'));
+  await fb.click('#gsw .gsw-btn[data-g="facebook"]');
+  await fb.waitForTimeout(300);
+  check(fb.url() === url + '?g=facebook#setup' && (await txt(fb, '#s-drawn')).startsWith('1 /') && await ticksOf(fb) === '100' && (await txt(fb, '#toast')).startsWith('現在顯示 Facebook 的抽獎'),
+    'the switcher shows the Facebook giveaway again, its winner and rules as they were');
+  await ctx6.close();
 
   check(!errors.length, 'no page errors ' + JSON.stringify(errors));
   await browser.close();

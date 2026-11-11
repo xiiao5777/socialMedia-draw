@@ -5,7 +5,7 @@
 (function () {
   'use strict';
   // Keep in step with COLLECTOR_VERSION in draw.html (build.js checks).
-  var VERSION = '1.5';
+  var VERSION = '1.6';
   // The 抽獎系統 page, filled in by build.js from the site address.
   var DRAW_URL = '__DRAW_URL__';
   var DRAW_ORIGIN = (DRAW_URL.match(/^https:\/\/[^/]+/) || [''])[0];
@@ -895,12 +895,13 @@
     where.textContent = PLATFORM_LABEL[platform] + '・' + (inDialog() ? '目前打開的視窗' : '目前頁面');
   }
   function unitText() { return S.kind === 'comment' ? '則留言' : (S.kind === 'like' ? '位按讚的人' : '位分享的人'); }
-  // 「230 / 256 則留言」 when the post's number is known
-  function setCount(n, e, own) {
+  // 「230 / 256 則留言」 when the post's number is known. The number stays as the post shows it: the
+  // author's own replies are not taken off, as the post may not count them (replies to replies).
+  function setCount(n, e) {
     countNum.textContent = String(n);
-    countUnit.textContent = (e ? '/ ' + (e.exact ? '' : '約 ') + Math.max(0, e.n - own) + ' ' : '') + unitText();
+    countUnit.textContent = (e ? '/ ' + (e.exact ? '' : '約 ') + e.n + ' ' : '') + unitText();
   }
-  function updateCount() { setCount(S.store.size, S.expect, got() - S.store.size); }
+  function updateCount() { setCount(S.store.size, S.expect); }
   function listScope() {
     var d = detect();
     if (d.kind !== 'comment') return d.scope;
@@ -998,7 +999,7 @@
     S.summary = res.summary;
     renderMode();
     css(countRow, { display: 'flex' });
-    setCount(res.n, res.e, res.own);
+    setCount(res.n, res.e);
     setStatus(res.summary);
     setAvLine(res);
     setTip(res.tip);
@@ -1055,10 +1056,10 @@
   // Opens the draw page (or the tab it opened before) and hands it the result with postMessage: the
   // page answers 'ready' once it listens, then 'ack' with what it did. A blocked pop-up copies the
   // result instead; a page that never answers (some sites cut the link to pages they open) leaves
-  // 複製結果 to press.
+  // 複製結果 to press. Each platform has its own giveaway, so each gets its own tab (?g= picks it).
   function sendToDraw(res, btn) {
     var w = null, id = String(Math.random()).slice(2), t0 = Date.now(), sent = 0, iv = null;
-    try { w = window.open(DRAW_URL + '#receive', 'giveaway-draw'); } catch (e) { w = null; }
+    try { w = window.open(DRAW_URL + '?g=' + platform + '#receive', 'giveaway-draw-' + platform); } catch (e) { w = null; }
     if (!w) { copyText(res.text, markCopied); return; }
     btn.disabled = true;
     setStatus('正在送到抽獎系統…');
@@ -1179,9 +1180,10 @@
       // Clicking alone is not progress: a button that loads nothing must not keep the run alive.
       if (S.store.size > before || moved) idle = 0; else idle++;
       // As many as the post says: done, once two more rounds bring nothing new. Fewer: keep trying
-      // a little longer before giving up.
+      // a little longer before giving up. With the author's own replies on the page the post's number
+      // may leave them out (replies to replies), so it cannot say the list is complete.
       var left = S.expect ? S.expect.n - got() : 0;
-      if (S.expect && S.expect.exact && left <= 0 && calm >= 2) { S.stop = 'count'; break; }
+      if (S.expect && S.expect.exact && left <= 0 && calm >= 2 && !S.skippedOwner.size) { S.stop = 'count'; break; }
       if (idle >= (left > 0 ? 12 : 7)) break;
       if (Date.now() - t0 > 8 * 60 * 1000) { S.stop = 'time'; break; }
     }
@@ -1268,7 +1270,7 @@
     var goOnText = '按「繼續抓」可以接著抓，已經抓到的會留著。';
     var more = S.stop === 'user' ? '已經停止。' : S.stop === 'time' ? '已經抓了 8 分鐘，先停一下。' : '';
     if (short > 0) {
-      more += '貼文上顯示' + (e.exact ? ' ' : '約 ') + (e.n - own) + { comment: ' 則留言', like: ' 個讚', share: ' 次分享' }[S.kind] + '，這次抓到 ' + n + '。' +
+      more += '貼文上顯示' + (e.exact ? ' ' : '約 ') + e.n + { comment: ' 則留言', like: ' 個讚', share: ' 次分享' }[S.kind] + '，這次抓到 ' + n + (own ? '，加上略過的作者回覆 ' + own + ' 則' : '') + '。' +
         (S.kind === 'share' ? '不公開的分享看不到，少一些是正常的。' : '差幾個是正常的（已刪除或看不到的）。') + '差很多的話，' + goOnText;
     } else if (more) more += goOnText;
     else if (!e) more = '比貼文上的數量少？' + goOnText;
