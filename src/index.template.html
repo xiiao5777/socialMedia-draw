@@ -1,0 +1,716 @@
+<!doctype html>
+<!-- Built by build.js from src/index.template.html. Edit the template, then run `npm run build`. -->
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>抽獎系統｜Facebook、X、Threads 貼文抽獎</title>
+<meta name="description" content="免費的貼文抽獎工具：抓下 Facebook、X、Threads 貼文的留言、按讚和分享名單，設定參加條件和獎品，公平地隨機抽出得獎者。不用登入，名單只存在你自己的瀏覽器。">
+<meta property="og:type" content="website">
+<meta property="og:title" content="抽獎系統｜Facebook、X、Threads 貼文抽獎">
+<meta property="og:description" content="抓下貼文的留言、按讚和分享名單，設定條件和獎品，公平地隨機抽出得獎者。免費、不用登入。">
+<meta property="og:url" content="__SITE_URL__">
+<meta name="theme-color" content="#F2F4F7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#11151C" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<script src="theme.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700;900&display=swap">
+<style>
+/* Homepage. Repeat users get the 開始抽獎 button (or 繼續抽獎 with last time's numbers) at the top;
+   first-time users read down: three steps, install, how to collect and draw, answers.
+   Same tokens as draw.html. */
+:root {
+  --paper: #F2F4F7;
+  --surface: #FFFFFF;
+  --surface-2: #EBEEF3;
+  --ink: #1A2030;
+  --muted: #586174;
+  --line: #D8DDE6;
+  --accent: #C62B2B;
+  --accent-text: #AE2323;
+  --accent-soft: #FBE8E6;
+  --on-accent: #FFFFFF;
+  --gold: #85600F;
+  --gold-soft: #F6EDD8;
+  --ok: #1B6E45;
+  --focus: #2A66E0;
+  --shadow: 0 1px 2px rgba(18, 26, 43, .06), 0 10px 28px rgba(18, 26, 43, .08);
+  --font-display: "Noto Serif TC", "Songti TC", "PMingLiU", serif;
+  --font-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --av-bg-l: 87%;
+  --av-fg-l: 27%;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #11151C;
+    --surface: #191E28;
+    --surface-2: #222835;
+    --ink: #E6E9EF;
+    --muted: #9AA3B4;
+    --line: #2E3545;
+    --accent: #CC3B37;
+    --accent-text: #F27C72;
+    --accent-soft: #3A1F21;
+    --on-accent: #FFFFFF;
+    --gold: #E2B65A;
+    --gold-soft: #33291A;
+    --ok: #5BC892;
+    --focus: #7AA5FF;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 28px rgba(0, 0, 0, .3);
+    --av-bg-l: 28%;
+    --av-fg-l: 86%;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #11151C;
+  --surface: #191E28;
+  --surface-2: #222835;
+  --ink: #E6E9EF;
+  --muted: #9AA3B4;
+  --line: #2E3545;
+  --accent: #CC3B37;
+  --accent-text: #F27C72;
+  --accent-soft: #3A1F21;
+  --on-accent: #FFFFFF;
+  --gold: #E2B65A;
+  --gold-soft: #33291A;
+  --ok: #5BC892;
+  --focus: #7AA5FF;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 28px rgba(0, 0, 0, .3);
+  --av-bg-l: 28%;
+  --av-fg-l: 86%;
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { scroll-padding-top: 16px; }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 15.5px; line-height: 1.7; -webkit-font-smoothing: antialiased; }
+h1, h2, h3 { margin: 0; text-wrap: balance; }
+p { margin: 0; }
+a { color: var(--accent-text); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.page {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding-bottom: 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.content { display: flex; flex-direction: column; gap: 72px; padding-block: 36px 72px; }
+.mark { display: inline-grid; place-items: center; width: 1.2em; height: 1.2em; font-size: .78em; letter-spacing: 0; background: var(--accent); color: var(--on-accent); border-radius: 6px; transform: rotate(-6deg); flex: none; }
+
+/* Top bar */
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-block: 14px; border-bottom: 1px solid var(--line); }
+.logo { display: inline-flex; align-items: center; gap: 10px; font-family: var(--font-display); font-weight: 900; font-size: 21px; letter-spacing: .06em; color: var(--ink); text-decoration: none; white-space: nowrap; }
+.topnav { display: flex; align-items: center; gap: 6px 20px; font-size: 14.5px; }
+.topnav a:not(.btn) { color: var(--ink); text-decoration: none; white-space: nowrap; }
+.topnav a:not(.btn):hover { color: var(--accent-text); }
+@media (max-width: 680px) { .topnav a:not(.btn) { display: none; } }
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 40px; padding: 8px 16px;
+  border-radius: 8px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink);
+  font: inherit; font-size: 14.5px; font-weight: 500; text-decoration: none;
+  cursor: pointer;
+}
+.btn:hover { border-color: var(--muted); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 700; }
+.btn-primary:hover { border-color: var(--accent); filter: brightness(1.06); }
+.btn-lg { min-height: 52px; padding: 12px 26px; font-size: 17px; font-weight: 700; border-radius: 10px; }
+.btn-sm { min-height: 34px; padding: 5px 14px; font-size: 14px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+/* 黑底／白底 button (theme.js). It shows the look you switch to. */
+.theme-toggle { display: inline-flex; align-items: center; min-height: 34px; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; line-height: 1.2; cursor: pointer; white-space: nowrap; }
+.theme-toggle:hover { border-color: var(--muted); }
+.theme-toggle > span { display: inline-flex; align-items: center; gap: 6px; }
+.theme-toggle svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.theme-toggle .tt-dark { display: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .theme-toggle .tt-light { display: none; }
+  :root:not([data-theme="light"]) .theme-toggle .tt-dark { display: inline-flex; }
+}
+:root[data-theme="dark"] .theme-toggle .tt-light { display: none; }
+:root[data-theme="dark"] .theme-toggle .tt-dark { display: inline-flex; }
+
+/* Hero */
+.hero { display: grid; gap: 36px; align-items: center; }
+@media (min-width: 900px) { .hero { grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 56px; } }
+.hero-text { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.kicker { font-size: 14px; font-weight: 700; letter-spacing: .12em; color: var(--accent-text); }
+.hero h1 { font-family: var(--font-display); font-weight: 900; font-size: clamp(34px, 5.6vw, 56px); line-height: 1.12; letter-spacing: .03em; }
+.lede { font-size: 17px; color: var(--muted); max-width: 34em; }
+.cta { display: flex; flex-wrap: wrap; gap: 12px; }
+.resume { display: flex; flex-direction: column; gap: 2px; padding: 12px 16px; border-radius: 10px; background: var(--gold-soft); border-left: 4px solid var(--gold); }
+.resume b { color: var(--gold); }
+.resume span { font-size: 14px; color: var(--muted); }
+.facts { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px 22px; font-size: 14.5px; }
+@media (min-width: 520px) { .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.facts li { display: flex; gap: 8px; align-items: baseline; }
+.facts li::before { content: "✓"; color: var(--ok); font-weight: 700; flex: none; }
+.meta { font-size: 13.5px; color: var(--muted); }
+
+/* Hero illustration: a winning raffle ticket, the same one the draw page stamps */
+.hero-art { display: flex; flex-direction: column; align-items: center; gap: 14px; min-width: 0; }
+.tk { position: relative; width: 100%; max-width: 430px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; transform: rotate(-1.5deg); }
+.tk-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 20px; background: var(--accent); color: var(--on-accent); font-weight: 700; letter-spacing: .04em; }
+.tk-no { font-family: var(--font-mono); font-weight: 600; }
+.tk-body { position: relative; min-height: 168px; padding: 24px 124px 24px 22px; display: flex; flex-direction: column; justify-content: center; gap: 10px; }
+.tk-who { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.tk-av { flex: none; width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center; font-family: var(--font-display); font-weight: 900; font-size: 25px; background: hsl(14 46% var(--av-bg-l)); color: hsl(14 52% var(--av-fg-l)); box-shadow: 0 0 0 3px var(--surface), 0 0 0 4px var(--line); }
+.tk-name { font-family: var(--font-display); font-weight: 900; font-size: clamp(28px, 4vw, 36px); line-height: 1.15; }
+.tk-quote { color: var(--muted); font-size: 14.5px; }
+.tk-foot { position: relative; display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 12px 22px 14px; border-top: 2px dashed var(--line); font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); }
+.tk-foot::before, .tk-foot::after { content: ""; position: absolute; top: -12px; width: 22px; height: 22px; border-radius: 50%; background: var(--paper); border: 1px solid var(--line); }
+.tk-foot::before { left: -12px; }
+.tk-foot::after { right: -12px; }
+.seal {
+  position: absolute; right: 22px; top: 50%;
+  width: 84px; height: 84px; margin-top: -42px; padding: 8px;
+  display: grid; grid-template-columns: 1fr 1fr; place-items: center;
+  font-family: var(--font-display); font-weight: 900; font-size: 25px; line-height: 1;
+  color: var(--accent-text);
+  border: 3px solid currentColor; border-radius: 7px;
+  box-shadow: inset 0 0 0 2px var(--surface), inset 0 0 0 4px currentColor;
+  transform: rotate(-8deg); opacity: .92;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .seal { animation: stamp .36s .5s cubic-bezier(.2, 1.4, .4, 1) both; }
+}
+@keyframes stamp {
+  from { transform: scale(1.9) rotate(-24deg); opacity: 0; }
+  to { transform: rotate(-8deg); opacity: .92; }
+}
+.hero-art figcaption { font-size: 13px; color: var(--muted); text-align: center; max-width: 36em; }
+@media (max-width: 460px) {
+  .tk-body { padding: 20px 18px 96px; }
+  .seal { top: auto; bottom: 14px; right: 18px; margin-top: 0; width: 66px; height: 66px; font-size: 20px; padding: 6px; }
+}
+
+/* Sections */
+.section { display: flex; flex-direction: column; gap: 20px; }
+.sec-head { display: flex; flex-direction: column; gap: 6px; }
+.sec-head h2 { font-family: var(--font-display); font-weight: 900; font-size: clamp(25px, 3.4vw, 32px); line-height: 1.25; letter-spacing: .03em; }
+.sec-head p { color: var(--muted); max-width: 46em; }
+.sub-title { font-size: 17px; font-weight: 700; margin-top: 4px; }
+
+.steps3 { display: grid; gap: 16px; }
+@media (min-width: 820px) { .steps3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.step-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.step-card .num { font-family: var(--font-display); font-weight: 900; font-size: 38px; line-height: 1; color: var(--accent-text); }
+.step-card h3 { font-size: 18px; font-weight: 700; }
+.step-card p { color: var(--muted); }
+.step-card .more { margin-top: auto; padding-top: 4px; font-weight: 700; text-decoration: none; }
+.step-card .more:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.card h3 { font-size: 17px; font-weight: 700; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; }
+.tag { font-size: 12px; font-weight: 500; padding: 1px 9px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
+.tag.rec { background: var(--accent-soft); color: var(--accent-text); }
+ol.steps { margin: 0; padding: 0; list-style: none; counter-reset: s; display: flex; flex-direction: column; gap: 10px; }
+ol.steps > li { counter-increment: s; display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; }
+ol.steps > li::before {
+  content: counter(s);
+  width: 24px; height: 24px; margin-top: 2px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: var(--ink); color: var(--surface);
+  font-family: var(--font-mono); font-size: 12.5px; font-weight: 600;
+}
+kbd { font-family: var(--font-mono); font-size: 12.5px; padding: 1px 6px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; background: var(--surface-2); white-space: nowrap; }
+.note { color: var(--muted); font-size: 13.5px; }
+code { font-family: var(--font-mono); font-size: .9em; background: var(--surface-2); padding: 0 5px; border-radius: 4px; }
+
+.update { background: var(--gold-soft); border-left: 4px solid var(--gold); border-radius: 10px; padding: 16px 20px; display: flex; flex-direction: column; gap: 8px; }
+.update h3 { font-size: 16px; font-weight: 700; }
+.update ul { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 2px; }
+.update p { max-width: 70ch; }
+
+/* Method 1: instructions and the real button on the left, the drag demo on the right */
+.m1 { display: grid; gap: 16px; grid-template-areas: "steps" "demo" "drag"; }
+@media (min-width: 900px) {
+  .m1 { grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); grid-template-areas: "steps demo" "drag demo"; grid-template-rows: auto 1fr; gap: 16px 28px; }
+}
+.m1 > ol { grid-area: steps; }
+.m1 > .demo { grid-area: demo; }
+.m1 > .drag-zone { grid-area: drag; align-self: start; }
+
+/* Drag demo: a looping animation of the browser — press the red button, drag it up to the
+   bookmarks bar, let go, and the bookmark appears. Static arrow when motion is reduced. */
+.demo { margin: 0; max-width: 560px; display: flex; flex-direction: column; gap: 10px; }
+.demo-svg { display: block; width: 100%; height: auto; }
+.demo-svg text { font-family: var(--font-body); }
+.d-win { fill: var(--surface-2); stroke: var(--line); }
+.d-dot { fill: var(--line); }
+.d-addr { fill: var(--surface); }
+.d-addr-t { fill: var(--muted); font-size: 12px; }
+.d-bar, .d-page { fill: var(--surface); }
+.d-sep { stroke: var(--line); }
+.d-chip { fill: var(--surface-2); }
+.d-chip-t, .d-bar-hint { fill: var(--muted); font-size: 11.5px; }
+.d-drop rect { fill: var(--accent-soft); stroke: var(--accent-text); stroke-dasharray: 4 3; }
+.d-new rect { fill: var(--accent-soft); stroke: var(--accent-text); }
+.d-new path { fill: var(--accent-text); }
+.d-new text { fill: var(--accent-text); font-size: 11.5px; font-weight: 700; }
+.d-h { fill: var(--ink); font-size: 13.5px; font-weight: 700; }
+.d-zone { fill: var(--gold-soft); }
+.d-zone-t { fill: var(--ink); font-size: 12.5px; }
+.d-btn rect, .d-ghost rect { fill: var(--accent); }
+.d-btn path, .d-ghost path { fill: var(--on-accent); }
+.d-btn text, .d-ghost text { fill: var(--on-accent); font-size: 14px; font-weight: 700; }
+.d-ripple { fill: none; stroke: var(--ink); stroke-width: 2; }
+.d-cursor path { fill: #FFFFFF; stroke: #10141C; stroke-width: 1.3; stroke-linejoin: round; }
+.d-arrow { display: none; fill: none; stroke: var(--accent-text); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.d-arrow.dash { stroke-dasharray: 6 5; }
+.d-btn, .d-new, .d-ripple { transform-box: fill-box; transform-origin: center; }
+.d-ghost, .d-new, .d-drop, .d-ripple { opacity: 0; }
+.demo-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px; }
+.demo-steps li { display: flex; align-items: center; gap: 6px; }
+.demo-steps b { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-size: 12px; flex: none; }
+.demo-toggle { align-self: flex-start; padding: 0; border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.demo .d-cursor { animation: d-cursor 6.5s ease-in-out infinite; }
+.demo .d-ghost { animation: d-ghost 6.5s ease-in-out infinite; }
+.demo .d-btn { animation: d-press 6.5s ease-in-out infinite; }
+.demo .d-drop { animation: d-drop 6.5s ease-in-out infinite; }
+.demo .d-new { animation: d-new 6.5s ease-in-out infinite; }
+.demo .d-ripple.r1 { animation: d-ripple1 6.5s ease-out infinite; }
+.demo .d-ripple.r2 { animation: d-ripple2 6.5s ease-out infinite; }
+.demo .demo-steps li:nth-child(1) { animation: d-s1 6.5s linear infinite; }
+.demo .demo-steps li:nth-child(2) { animation: d-s2 6.5s linear infinite; }
+.demo .demo-steps li:nth-child(3) { animation: d-s3 6.5s linear infinite; }
+.demo.paused .demo-svg *, .demo.paused .demo-steps li { animation-play-state: paused; }
+@keyframes d-cursor {
+  0% { transform: translate(390px, 214px); opacity: 0; }
+  5% { opacity: 1; }
+  14%, 20% { transform: translate(122px, 166px); }
+  52%, 58% { transform: translate(154px, 57px); }
+  70%, 90% { transform: translate(262px, 120px); opacity: 1; }
+  100% { transform: translate(390px, 214px); opacity: 0; }
+}
+@keyframes d-ghost {
+  0%, 15% { transform: translate(0, 0); opacity: 0; }
+  20% { transform: translate(0, 0); opacity: .9; }
+  52% { transform: translate(32px, -109px); opacity: .9; }
+  56%, 100% { transform: translate(32px, -109px); opacity: 0; }
+}
+@keyframes d-press {
+  0%, 14% { transform: scale(1); }
+  16%, 20% { transform: scale(.96); }
+  24%, 100% { transform: scale(1); }
+}
+@keyframes d-drop {
+  0%, 18% { opacity: 0; }
+  24%, 52% { opacity: 1; }
+  55%, 100% { opacity: 0; }
+}
+@keyframes d-new {
+  0%, 52% { opacity: 0; transform: scale(.8); }
+  56% { opacity: 1; transform: scale(1.1); }
+  61%, 90% { opacity: 1; transform: scale(1); }
+  97%, 100% { opacity: 0; transform: scale(1); }
+}
+@keyframes d-ripple1 {
+  0%, 14% { opacity: 0; transform: scale(.3); }
+  16% { opacity: .5; }
+  25%, 100% { opacity: 0; transform: scale(1.6); }
+}
+@keyframes d-ripple2 {
+  0%, 52% { opacity: 0; transform: scale(.3); }
+  54% { opacity: .5; }
+  63%, 100% { opacity: 0; transform: scale(1.6); }
+}
+@keyframes d-s1 { 0%, 20% { opacity: 1; } 23%, 96% { opacity: .38; } 100% { opacity: 1; } }
+@keyframes d-s2 { 0%, 20% { opacity: .38; } 23%, 52% { opacity: 1; } 55%, 100% { opacity: .38; } }
+@keyframes d-s3 { 0%, 52% { opacity: .38; } 55%, 93% { opacity: 1; } 97%, 100% { opacity: .38; } }
+@media (prefers-reduced-motion: reduce) {
+  .demo .demo-svg *, .demo .demo-steps li { animation: none !important; }
+  .demo .d-cursor, .demo .demo-toggle { display: none; }
+  .demo .d-drop { opacity: 1; }
+  .demo .d-arrow { display: inline; }
+}
+
+.drag-zone { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; padding: 16px; border-radius: 10px; background: var(--gold-soft); }
+.bookmarklet {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+  font-size: 16px;
+  text-decoration: none;
+  cursor: grab;
+  box-shadow: var(--shadow);
+  user-select: none;
+}
+.bookmarklet::before { content: ""; width: 10px; height: 14px; background: var(--on-accent); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 72%, 0 100%); flex: none; }
+.drag-zone .note { color: var(--ink); flex: 1 1 16em; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+textarea.code { width: 100%; height: 110px; font-family: var(--font-mono); font-size: 12px; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; resize: vertical; word-break: break-all; }
+details.more-code summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+details.more-code[open] summary { margin-bottom: 8px; }
+
+.platforms { display: grid; gap: 16px; }
+@media (min-width: 820px) { .platforms { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.platforms .card { gap: 12px; }
+.platforms ol.steps { font-size: 14.5px; }
+.sub-h { font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: .06em; margin-top: 4px; }
+.platforms p, .platforms li { overflow-wrap: anywhere; }
+
+.draw-steps { display: grid; gap: 12px 24px; margin: 0; padding: 0; list-style: none; counter-reset: d; }
+@media (min-width: 820px) { .draw-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.draw-steps li { counter-increment: d; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; }
+.draw-steps li::before { content: counter(d); width: 28px; height: 28px; display: grid; place-items: center; border-radius: 7px; background: var(--accent); color: var(--on-accent); font-family: var(--font-mono); font-size: 13.5px; font-weight: 600; }
+.draw-steps b { display: block; }
+.draw-steps span { color: var(--muted); font-size: 14.5px; }
+
+.faq { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.faq details { padding: 0 18px; }
+.faq details + details { border-top: 1px solid var(--line); }
+.faq summary { cursor: pointer; padding: 14px 0; font-weight: 700; list-style: none; display: flex; justify-content: space-between; gap: 16px; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: "+"; flex: none; color: var(--muted); font-family: var(--font-mono); font-weight: 600; }
+.faq details[open] summary::after { content: "−"; }
+.faq details p { color: var(--muted); max-width: 70ch; padding-bottom: 16px; }
+
+.foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13.5px; }
+.foot p { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.foot .mark { font-size: 15px; }
+.foot a { color: var(--muted); }
+.toast {
+  position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  z-index: 20; max-width: calc(100% - 32px);
+  padding: 10px 16px; border-radius: 8px;
+  background: var(--ink); color: var(--surface); font-size: 14px; box-shadow: var(--shadow);
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="topbar">
+    <a class="logo" href="./"><span class="mark" aria-hidden="true">抽</span>抽獎系統</a>
+    <nav class="topnav" aria-label="網站">
+      <a href="#start">第一次用</a>
+      <a href="#install">安裝抓取工具</a>
+      <a href="#faq">常見問題</a>
+      <button class="theme-toggle" type="button" id="theme-toggle" title="切換黑底／白底">
+        <span class="tt-light"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z"/></svg><span class="sr-only">切換成</span>黑底</span>
+        <span class="tt-dark"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg><span class="sr-only">切換成</span>白底</span>
+      </button>
+      <a class="btn btn-primary btn-sm" href="draw.html">開始抽獎</a>
+    </nav>
+  </header>
+
+  <main class="content">
+    <section class="hero" aria-labelledby="h-hero">
+      <div class="hero-text">
+        <p class="kicker">FACEBOOK・X・THREADS</p>
+        <h1 id="h-hero">貼文抽獎，<br>三步驟搞定</h1>
+        <p class="lede">抓下貼文的留言、按讚和分享名單，設定參加條件和獎品，公平地隨機抽出得獎者。免費、不用登入，名單只存在你自己的瀏覽器。</p>
+        <div class="resume" id="resume" role="status" hidden>
+          <b>你上次的抽獎還在</b>
+          <span id="resume-text"></span>
+        </div>
+        <div class="cta">
+          <a class="btn btn-primary btn-lg" id="cta-draw" href="draw.html">開始抽獎</a>
+          <a class="btn btn-lg" href="#start">第一次用？從這裡開始</a>
+        </div>
+        <ul class="facts">
+          <li>同一個人留言很多次只算一次</li>
+          <li>抽出的人自動移出抽獎池</li>
+          <li>條件：按讚、分享、標記、關鍵字</li>
+          <li>複製得獎公告、下載 CSV 紀錄</li>
+        </ul>
+        <p class="meta">抓取工具最新版 v__VERSION__・<a href="#whats-new">更新了什麼</a></p>
+      </div>
+      <figure class="hero-art" aria-hidden="true">
+        <div class="tk">
+          <div class="tk-top"><span>頭獎・藍牙耳機</span><span class="tk-no">No. 07</span></div>
+          <div class="tk-body">
+            <div class="tk-who"><span class="tk-av">陳</span><p class="tk-name">陳小明</p></div>
+            <p class="tk-quote">我要抽！@Amy Lim @林雅婷</p>
+            <div class="seal"><span>恭</span><span>喜</span><span>中</span><span>獎</span></div>
+          </div>
+          <div class="tk-foot"><span>第 1 / 1 名</span><span>當時抽獎池 14 位</span><span>20:00:13</span></div>
+        </div>
+        <figcaption>抽獎台：抽出的人會蓋上「恭喜中獎」，也可以開全螢幕直播給大家看。</figcaption>
+      </figure>
+    </section>
+
+    <section class="section" id="start" aria-labelledby="h-start">
+      <div class="sec-head">
+        <h2 id="h-start">第一次用？三個步驟</h2>
+        <p>第 1 步只要做一次，之後每次抽獎都從第 2 步開始。</p>
+      </div>
+      <div class="steps3">
+        <div class="step-card">
+          <span class="num">1</span>
+          <h3>安裝抓取工具</h3>
+          <p>把紅色按鈕拖到瀏覽器的書籤列，就裝好了。每台電腦、每個瀏覽器裝一次就好。</p>
+          <a class="more" href="#install">看安裝方法 ↓</a>
+        </div>
+        <div class="step-card">
+          <span class="num">2</span>
+          <h3>到貼文抓名單</h3>
+          <p>打開 Facebook、X 或 Threads 的貼文，按書籤列的「抓取抽獎名單」。跑完按「複製結果」。</p>
+          <a class="more" href="#use">看各平台怎麼抓 ↓</a>
+        </div>
+        <div class="step-card">
+          <span class="num">3</span>
+          <h3>貼上，設定，抽獎</h3>
+          <p>到抽獎系統第 1 步貼上名單，設定參加條件和獎品，按「抽出 1 位」。</p>
+          <a class="more" href="draw.html">開始抽獎 →</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="install" aria-labelledby="h-install">
+      <div class="sec-head">
+        <h2 id="h-install">安裝抓取工具</h2>
+        <p>每台電腦、每個瀏覽器只要裝一次。請用電腦版的 Chrome、Edge、Safari 或 Firefox，手機不能裝。</p>
+      </div>
+
+      <div class="update" id="whats-new" role="note">
+        <h3>v__VERSION__ 更新了</h3>
+        <ul>
+          <li>抽獎系統有新網址了：主頁、安裝說明和抽獎頁都在這個網站。</li>
+          <li>複製結果後，工具上會多一個「打開抽獎系統」按鈕，一按就能打開抽獎頁貼上。</li>
+          <li>v1.1 的頭像、個人檔案和留言連結、綠色「✓ 已複製」提示都還在。</li>
+        </ul>
+        <p><b>已經裝過舊版的話：</b>在書籤列的「抓取抽獎名單」上按右鍵，選「刪除」，再用下面的方法一重新拖一次。打開工具時，標題旁邊顯示「v__VERSION__」就是新版。</p>
+      </div>
+
+      <div class="card">
+        <h3>方法一：拖到書籤列 <span class="tag rec">最快</span></h3>
+        <div class="m1">
+          <ol class="steps">
+            <li><p>先讓書籤列顯示出來：在 Chrome 或 Edge 按 <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd>，Mac 按 <kbd>⌘</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd>。網址列下面會多出一條橫列。</p></li>
+            <li><p>用滑鼠按住紅色的「抓取抽獎名單」按鈕不放，拖到書籤列上再放開。動畫示範了整個過程。</p></li>
+          </ol>
+          <figure class="demo" id="demo">
+            <svg class="demo-svg" viewBox="0 0 560 236" role="img" aria-labelledby="demo-title">
+              <title id="demo-title">動畫示範：用滑鼠按住紅色的「抓取抽獎名單」按鈕，往上拖到網址列下面的書籤列再放開，書籤列就會多一個「抓取抽獎名單」。</title>
+              <rect class="d-win" x="0.5" y="0.5" width="559" height="235" rx="12"/>
+              <circle class="d-dot" cx="20" cy="20" r="5"/><circle class="d-dot" cx="36" cy="20" r="5"/><circle class="d-dot" cx="52" cy="20" r="5"/>
+              <rect class="d-addr" x="72" y="9" width="472" height="22" rx="11"/>
+              <text class="d-addr-t" x="88" y="24.5">抽獎系統・安裝抓取工具（就是這一頁）</text>
+              <rect class="d-bar" x="1" y="40" width="558" height="34"/>
+              <line class="d-sep" x1="1" y1="40.5" x2="559" y2="40.5"/>
+              <line class="d-sep" x1="1" y1="74.5" x2="559" y2="74.5"/>
+              <rect class="d-chip" x="12" y="48" width="68" height="18" rx="5"/>
+              <text class="d-chip-t" x="46" y="61" text-anchor="middle">常用網站</text>
+              <g class="d-drop"><rect x="88" y="46" width="132" height="22" rx="6"/></g>
+              <g class="d-new">
+                <rect x="88" y="46" width="132" height="22" rx="6"/>
+                <path d="M97 51.5h8v12l-4-3-4 3z"/>
+                <text x="111" y="61.5">抓取抽獎名單</text>
+              </g>
+              <text class="d-bar-hint" x="546" y="61.5" text-anchor="end">← 這一條是書籤列</text>
+              <path class="d-page" d="M1 75H559V223A12 12 0 0 1 547 235H13A12 12 0 0 1 1 223Z"/>
+              <text class="d-h" x="24" y="104">方法一：拖到書籤列</text>
+              <rect class="d-zone" x="24" y="120" width="512" height="92" rx="10"/>
+              <g class="d-btn">
+                <rect x="44" y="146" width="156" height="40" rx="8"/>
+                <path d="M58 158h9v14l-4.5-3.4-4.5 3.4z"/>
+                <text x="134" y="171" text-anchor="middle">抓取抽獎名單</text>
+              </g>
+              <text class="d-zone-t" x="218" y="171">書籤列出現「抓取抽獎名單」就裝好了</text>
+              <path class="d-arrow dash" d="M122 142C122 110 154 104 154 80"/>
+              <path class="d-arrow" d="M147 87L154 76L161 87"/>
+              <circle class="d-ripple r1" cx="122" cy="166" r="16"/>
+              <circle class="d-ripple r2" cx="154" cy="57" r="16"/>
+              <g class="d-ghost">
+                <rect x="44" y="146" width="156" height="40" rx="8"/>
+                <path d="M58 158h9v14l-4.5-3.4-4.5 3.4z"/>
+                <text x="134" y="171" text-anchor="middle">抓取抽獎名單</text>
+              </g>
+              <g class="d-cursor"><path d="M0 0V19L4.8 14.6L8.2 22.4L11.6 21L8.3 13.3H14.6Z"/></g>
+            </svg>
+            <ol class="demo-steps">
+              <li><b>1</b>按住紅色按鈕不放</li>
+              <li><b>2</b>往上拖到書籤列</li>
+              <li><b>3</b>放開，書籤列就多一個「抓取抽獎名單」</li>
+            </ol>
+            <button class="demo-toggle" type="button" id="demo-toggle" aria-pressed="false">暫停動畫</button>
+          </figure>
+          <div class="drag-zone">
+            <a class="bookmarklet" id="bookmarklet" href="__BOOKMARKLET__" title="拖到書籤列">抓取抽獎名單</a>
+            <p class="note"><b>拖這個按鈕。</b>書籤列出現「抓取抽獎名單」就裝好了。直接點它不會有反應，要用拖的。</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>方法二：複製程式碼 <span class="tag">拖不動時用</span></h3>
+        <ol class="steps">
+          <li>
+            <div class="row"><p>按這個按鈕複製程式碼：</p><button class="btn btn-primary" type="button" id="btn-copy-code">複製程式碼</button></div>
+          </li>
+          <li><p>在 Chrome 按 <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>O</kbd>（Mac 按 <kbd>⌘</kbd> + <kbd>Option</kbd> + <kbd>B</kbd>）打開書籤管理員，點右上角的「⋮」，選「新增書籤」。Edge 的步驟類似，在「我的最愛」裡新增。</p></li>
+          <li><p>名稱填「抓取抽獎名單」，網址那一欄貼上剛剛複製的程式碼，按「儲存」。</p></li>
+        </ol>
+        <details class="more-code">
+          <summary>複製按鈕沒反應？顯示程式碼自己複製</summary>
+          <textarea class="code" id="code" readonly aria-label="抓取工具程式碼"></textarea>
+        </details>
+      </div>
+    </section>
+
+    <section class="section" id="use" aria-labelledby="h-use">
+      <div class="sec-head">
+        <h2 id="h-use">使用教學</h2>
+        <p>抓完都是按「複製結果」，再到抽獎系統第 1 步貼上，按「加入名單」。留言、按讚、分享要分開抓、分開貼，同一個人會自動合併。</p>
+      </div>
+      <h3 class="sub-title">抓名單</h3>
+      <div class="platforms">
+        <div class="card">
+          <h3>Facebook</h3>
+          <p class="sub-h">留言</p>
+          <ol class="steps">
+            <li><p>打開那一則貼文。在動態上的話，先點貼文上的時間，進到單一貼文。</p></li>
+            <li><p>按書籤列的「抓取抽獎名單」。工具會把排序改成「所有留言」，並自動展開全部留言和回覆。</p></li>
+            <li><p>跑完後按「複製結果」。</p></li>
+          </ol>
+          <p class="sub-h">按讚和分享</p>
+          <p>點貼文下方的心情數字（或「X 次分享」）打開名單視窗，再按一次書籤。</p>
+        </div>
+        <div class="card">
+          <h3>X</h3>
+          <p class="sub-h">回覆</p>
+          <ol class="steps">
+            <li><p>點進那一則貼文，網址會有 <code>/status/</code>。</p></li>
+            <li><p>按書籤，工具會往下捲動讀取所有回覆。你自己的回覆會自動略過。</p></li>
+            <li><p>跑完後按「複製結果」。</p></li>
+          </ol>
+          <p class="sub-h">按讚、轉發、引用</p>
+          <p>點貼文的按讚數或轉發數打開名單頁（網址結尾是 <code>/likes</code>、<code>/retweets</code> 或 <code>/quotes</code>），再按一次書籤。X 只讓貼文作者看到按讚名單。</p>
+        </div>
+        <div class="card">
+          <h3>Threads</h3>
+          <p class="sub-h">回覆</p>
+          <ol class="steps">
+            <li><p>點進那一則貼文，網址會有 <code>/post/</code>。</p></li>
+            <li><p>按書籤，工具會往下捲動讀取所有回覆。你自己的回覆會自動略過。</p></li>
+            <li><p>跑完後按「複製結果」。</p></li>
+          </ol>
+          <p class="sub-h">按讚和轉發</p>
+          <p>點貼文下方的讚數或「動態」打開名單視窗，再按一次書籤。</p>
+        </div>
+      </div>
+      <h3 class="sub-title">抽獎</h3>
+      <div class="card">
+        <ol class="draw-steps">
+          <li><p><b>匯入參加者</b><span>把複製的結果貼到第 1 步，按「加入名單」。也可以直接貼名字，或匯入 CSV 檔。</span></p></li>
+          <li><p><b>參加條件</b><span>勾選要留言、按讚、分享、標記幾位好友、包含關鍵字，也能排除小編。參加者名單會標出誰符合資格。</span></p></li>
+          <li><p><b>獎品</b><span>設定每個獎項的名稱和名額。</span></p></li>
+          <li><p><b>抽獎台</b><span>按「抽出 1 位」。抽出的人會移出抽獎池，不會重複中獎。可以開全螢幕給大家看。</span></p></li>
+          <li><p><b>得獎名單</b><span>「複製得獎公告」貼到貼文，「下載 CSV 紀錄」留存。聯絡不上的得獎者可以作廢再補抽。</span></p></li>
+        </ol>
+        <div class="row"><a class="btn btn-primary" href="draw.html">開始抽獎</a><p class="note">第一次打開會有範例資料，可以先試抽；按「清除範例，開始使用」就換成你的名單。</p></div>
+      </div>
+    </section>
+
+    <section class="section" id="faq" aria-labelledby="h-faq">
+      <div class="sec-head"><h2 id="h-faq">常見問題</h2></div>
+      <div class="faq">
+        <details><summary>要付費或登入嗎？</summary><p>不用。整個網站免費，不用註冊、不用登入，也不用給任何帳號權限。抓取工具只讀你自己畫面上看得到的名單。</p></details>
+        <details><summary>抽獎資料存在哪裡？</summary><p>存在你這台電腦的瀏覽器裡，不會上傳到任何伺服器。換電腦、換瀏覽器、用無痕視窗或清除瀏覽資料，就看不到之前的抽獎了，抽完記得「下載 CSV 紀錄」或「複製得獎公告」保存。</p></details>
+        <details><summary>要辦下一次抽獎怎麼做？</summary><p>抽獎系統一次保存一場抽獎。先把這次的結果下載 CSV 保存，再到得獎名單下面按「清除全部資料」，就能從第 1 步重新開始。</p></details>
+        <details><summary>抽獎公平嗎？</summary><p>抽獎用瀏覽器內建的密碼學亂數，每位符合資格的人機會都一樣。同一個人留言很多次也只算一次，抽出的人會移出抽獎池。每次抽出都會記下時間和當時抽獎池人數，CSV 紀錄裡都有。</p></details>
+        <details><summary>抓的時候可以切到別的分頁嗎？</summary><p>請不要。瀏覽器會把背景分頁放慢，工具可能停住或抓不完整。留言很多時要等幾分鐘，跑完會顯示「複製結果」按鈕。</p></details>
+        <details><summary>抓到 0 則或數量不對怎麼辦？</summary><p>先確認打開的是單一貼文，按讚或分享名單要先點開名單視窗再按書籤。還是不對的話，按工具上的「複製診斷資訊」，連同哪個平台一起<a href="__REPO_URL__/issues" target="_blank" rel="noopener">回報問題</a>。</p></details>
+        <details><summary>名單會被傳到別的地方嗎？</summary><p>不會。工具只讀你畫面上的內容（頭像會從同一個網站的圖片伺服器再讀一次，用來縮小），結果複製到你自己的剪貼簿，由你貼到抽獎系統，不會傳到其他伺服器。</p></details>
+        <details><summary>有些頭像沒抓到？</summary><p>有的網站不讓其他網頁讀取圖片。抓不到的人，在抽獎系統會用名字的第一個字代替，不影響抽獎。工具跑完會顯示「頭像 幾 / 幾 張」。</p></details>
+        <details><summary>手機可以用嗎？</summary><p>抓取工具要在電腦的瀏覽器上用。抽獎頁手機也打得開，但資料存在各自的瀏覽器裡，電腦上的抽獎不會出現在手機上。</p></details>
+        <details><summary>怎麼知道工具有沒有更新？</summary><p>工具面板的標題旁邊會顯示版本（現在最新是 v__VERSION__）。把抓取結果貼到抽獎系統時，如果用的是舊版，抽獎系統會跳出提醒，告訴你怎麼更新。</p></details>
+        <details><summary>Facebook、X 或 Threads 改版後不能用了？</summary><p>請<a href="__REPO_URL__/issues" target="_blank" rel="noopener">回報問題</a>，修好後會更新工具。更新後要刪掉舊的「抓取抽獎名單」書籤，再照上面的步驟裝一次。</p></details>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <p><span class="mark" aria-hidden="true">抽</span>抽獎系統・抓取工具 v__VERSION__</p>
+    <p><a href="__REPO_URL__" target="_blank" rel="noopener">GitHub 原始碼</a><span aria-hidden="true">・</span><a href="__REPO_URL__/issues" target="_blank" rel="noopener">回報問題</a></p>
+  </footer>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+(function () {
+  'use strict';
+  var timer = null;
+  function toast(msg) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.hidden = false;
+    clearTimeout(timer);
+    timer = setTimeout(function () { t.hidden = true; }, 3600);
+  }
+
+  // Repeat visitors: the draw page leaves a short summary of the giveaway in progress.
+  var SUMMARY_KEY = 'giveaway-draw:summary';
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function showResume() {
+    var s = null;
+    try { s = JSON.parse(localStorage.getItem(SUMMARY_KEY) || 'null'); } catch (e) { /* storage unavailable */ }
+    var box = document.getElementById('resume');
+    var cta = document.getElementById('cta-draw');
+    if (!s || s.sample || !(s.people > 0)) {
+      box.hidden = true;
+      cta.textContent = '開始抽獎';
+      return;
+    }
+    var done = s.total > 0 && s.drawn >= s.total;
+    var d = new Date(s.at);
+    var when = isNaN(d) ? '' : '（' + (d.getMonth() + 1) + '/' + d.getDate() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ' 更新）';
+    document.getElementById('resume-text').textContent = '參加者 ' + s.people + ' 位，' +
+      (done ? '全部 ' + s.total + ' 名都抽完了' : s.drawn ? '已抽出 ' + s.drawn + ' / ' + s.total + ' 名' : '還沒開始抽') + when +
+      '。要辦新的抽獎，進去後在得獎名單下面按「清除全部資料」。';
+    cta.textContent = done ? '查看抽獎結果' : '繼續抽獎';
+    box.hidden = false;
+  }
+  showResume();
+  window.addEventListener('storage', function (e) { if (e.key === SUMMARY_KEY || e.key === null) showResume(); });
+  window.addEventListener('pageshow', function (e) { if (e.persisted) showResume(); });
+
+  var link = document.getElementById('bookmarklet');
+  var code = link.getAttribute('href');
+  var box = document.getElementById('code');
+  box.value = code;
+  link.addEventListener('click', function (e) {
+    e.preventDefault();
+    toast('要用滑鼠按住這個按鈕，拖到書籤列上；直接點不會有反應。');
+  });
+  document.getElementById('btn-copy-code').addEventListener('click', function () {
+    function fallback() {
+      var d = box.closest('details');
+      if (d) d.open = true;
+      box.focus();
+      box.select();
+      toast('已選取程式碼，請按 Ctrl+C（Mac 按 ⌘+C）複製。');
+    }
+    try {
+      var p = navigator.clipboard && navigator.clipboard.writeText(code);
+      if (!p) { fallback(); return; }
+      p.then(function () { toast('已複製程式碼，接著到書籤管理員新增書籤。'); }, fallback);
+    } catch (e) { fallback(); }
+  });
+
+  var demo = document.getElementById('demo');
+  var demoBtn = document.getElementById('demo-toggle');
+  demoBtn.addEventListener('click', function () {
+    var paused = demo.classList.toggle('paused');
+    demoBtn.textContent = paused ? '播放動畫' : '暫停動畫';
+    demoBtn.setAttribute('aria-pressed', String(paused));
+  });
+})();
+</script>
+</body>
+</html>
