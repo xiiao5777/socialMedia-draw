@@ -40,6 +40,7 @@ function fbPostPage() {
   <div role="main"><div role="article">
     <a href="https://www.facebook.com/brandpage" role="link"><span>品牌粉專</span></a>
     <div dir="auto">年終抽獎！留言「我要抽」並標記 2 位朋友</div>
+    <div><span role="button" tabindex="0"><span>22 則留言</span></span> <span>5 次分享</span></div>
     <div role="button" id="sort"><span>最相關</span></div>
     <div id="comments"></div>
     <div role="button" id="more"><span>查看更多留言</span></div>
@@ -137,6 +138,7 @@ function fbFlowPage() {
   <div role="main"><div role="article">
     <a href="https://www.facebook.com/brandpage" role="link"><span>品牌粉專</span></a>
     <div dir="auto">抽獎！留言、按讚、分享</div>
+    <div role="button" style="display:inline-block;padding:4px"><span>4 則留言</span></div>
     <div role="button" id="reactions" style="display:inline-block;padding:4px"><span>👍❤️</span> <span>8</span></div>
     <div role="button" id="shares" style="display:inline-block;padding:4px"><span>3 次分享</span></div>
     <div id="comments">${comments}</div>
@@ -155,12 +157,58 @@ function fbFlowPage() {
   </script></body></html>`;
 }
 
+// The post says 5 comments and has them all at once, above a very long page: the run stops when it
+// has the 5, instead of scrolling to the end of the page first.
+function fbCountPage() {
+  const c = [['陳小明', 'xiaoming.chen'], ['Amy Lim', 'amy.lim.123'], ['林雅婷', 'profile.php?id=100045'], ['Kelly Wong', 'kelly.wong.77'], ['張家瑋', 'jiawei.zhang']]
+    .map((p, i) => fbComment({ id: 'K' + (i + 1), name: p[0], path: p[1], text: '我要抽！' })).join('');
+  return `<!doctype html><html><head>${common}</head><body>
+  <div role="main"><div role="article">
+    <a href="https://www.facebook.com/brandpage" role="link"><span>品牌粉專</span></a>
+    <div dir="auto">抽獎！</div>
+    <div role="button"><span>5 則留言</span></div>
+    <div id="comments">${c}</div>
+    <div><div contenteditable="true" role="textbox" aria-label="留言……"></div></div>
+  </div></div>
+  <div style="height:40000px"></div>
+  </body></html>`;
+}
+
+// The post says 12 comments; 8 show, and the other 4 only come once window.__unlock() is called
+// (by then the first run has ended short): 繼續抓 picks them up and keeps the first 8.
+function fbMorePage() {
+  const people = Array.from({ length: 12 }, (_, i) => ['粉絲 ' + (i + 1), 'fan.more.' + (i + 1)]);
+  const all = people.map((p, i) => fbComment({ id: 'M' + (i + 1), name: p[0], path: p[1], text: '我要抽！' }));
+  return `<!doctype html><html><head>${common}</head><body>
+  <div role="main"><div role="article">
+    <a href="https://www.facebook.com/brandpage" role="link"><span>品牌粉專</span></a>
+    <div dir="auto">抽獎！</div>
+    <div role="button"><span>12 則留言</span></div>
+    <div id="comments">${all.slice(0, 8).join('')}</div>
+    <div id="more-slot"></div>
+    <div><div contenteditable="true" role="textbox" aria-label="留言……"></div></div>
+  </div></div>
+  <script>
+    const rest = ${JSON.stringify(all.slice(8).join(''))};
+    window.__unlock = () => { document.getElementById('more-slot').innerHTML = '<div role="button" id="more"><span>查看更多留言</span></div>'; };
+    document.addEventListener('click', (e) => {
+      const t = e.target.closest('#more');
+      if (t) setTimeout(() => { document.getElementById('comments').insertAdjacentHTML('beforeend', rest); t.remove(); }, 300);
+    });
+  </script></body></html>`;
+}
+
+// A page on another site that tries to hand the draw page a list, the way the 抓取工具 does.
+function evilPage() {
+  return `<!doctype html><html><head>${common}</head><body><p>Not the collector</p></body></html>`;
+}
+
 function xArticle(t) {
   return `<article data-testid="tweet" role="article" tabindex="0">
     <div data-testid="Tweet-User-Avatar"><a href="/${t.handle}" role="link"><img alt="" width="40" height="40" src="https://pbs.twimg.com/profile_images/1${t.id}/${t.handle}_normal.jpg"></a></div>
     <div data-testid="User-Name"><a href="/${t.handle}" role="link"><span>${t.name}</span></a><a href="/${t.handle}" role="link" tabindex="-1"><span>@${t.handle}</span></a><a href="/${t.handle}/status/${t.id}" role="link"><time datetime="2026-11-10T10:00:00.000Z">${t.focal ? '10:00 AM · Nov 10, 2026' : '2h'}</time></a></div>
     <div data-testid="tweetText"><span>${t.text}</span>${(t.tags || []).map(h => ` <a href="/${h}" role="link">@${h}</a>`).join('')}</div>
-    <div role="group"><div role="button" aria-label="3 replies"><span>3</span></div></div>
+    <div role="group"${t.stats ? ` aria-label="${t.stats}"` : ''}><div role="button" aria-label="3 replies"><span>3</span></div></div>
   </article>`;
 }
 
@@ -180,7 +228,7 @@ function xPostPage() {
   <script>
     window.__xArticle = ${xArticle.toString()};
     const parent = { id: '100', handle: 'someone', name: 'Someone', text: 'parent post' };
-    const focal = { id: '111', handle: 'brand', name: 'Brand', text: '抽獎！回覆我要抽並標記 2 位朋友', focal: true };
+    const focal = { id: '111', handle: 'brand', name: 'Brand', text: '抽獎！回覆我要抽並標記 2 位朋友', focal: true, stats: '34 replies, 12 reposts, 25 likes, 3 bookmarks, 4512 views' };
     const replies = ${JSON.stringify(replies)};
     const hiddenMore = ${JSON.stringify(hiddenMore)};
     let loaded = 8, start = 0, extra = false;
@@ -213,7 +261,7 @@ function xFlowPage() {
   <main><div data-testid="primaryColumn"><div id="feed"></div></div></main>
   <script>
     window.__xArticle = ${xArticle.toString()};
-    const focal = { id: '222', handle: 'brand', name: 'Brand', text: '抽獎！回覆、按讚、轉發', focal: true };
+    const focal = { id: '222', handle: 'brand', name: 'Brand', text: '抽獎！回覆、按讚、轉發', focal: true, stats: '3 replies, 0 reposts, 5 likes, 0 bookmarks, 80 views' };
     const replies = [1, 2, 3].map(i => ({ id: String(3000 + i), handle: 'fan_' + i, name: 'Fan ' + i, text: '我要抽' }));
     const feed = document.getElementById('feed');
     function post() { feed.innerHTML = __xArticle(focal) + '<a href="/brand/status/222/likes" id="likes-link" role="link">5 Likes</a>' + replies.map(__xArticle).join(''); }
@@ -256,7 +304,7 @@ function thPost(p) {
       <span><a href="/@${p.user}/post/${p.id}" role="link"><time datetime="2026-11-10T08:00:00.000Z" title="2026年11月10日">2小時</time></a></span>
       ${p.author ? '<span dir="auto">作者</span>' : ''}</div>
     <div><span dir="auto"><span>${p.text}</span>${(p.tags || []).map(t => ` <a href="/@${t}" role="link"><span dir="auto">@${t}</span></a>`).join('')}</span></div>
-    <div><div role="button"><span>讚</span><span dir="auto">12</span></div><div role="button"><span dir="auto">3</span></div></div>
+    <div><div role="button"><svg aria-label="讚" width="18" height="18"></svg><span dir="auto">${p.likes || 12}</span></div><div role="button"><svg aria-label="回覆" width="18" height="18"></svg><span dir="auto">${p.replies || 3}</span></div></div>
   </div>`;
 }
 
@@ -267,7 +315,7 @@ function thPostPage() {
   <div id="feed"></div>
   <script>
     window.__thPost = ${thPost.toString()};
-    const main = { id: 'DAbc123', user: 'brandtw', text: '雙十一抽獎！留言並標記朋友', author: true };
+    const main = { id: 'DAbc123', user: 'brandtw', text: '雙十一抽獎！留言並標記朋友', author: true, replies: 17 };
     const replies = ${JSON.stringify(replies)};
     let loaded = 6;
     function draw() { document.getElementById('feed').innerHTML = __thPost(main) + replies.slice(0, loaded).map(__thPost).join(''); }
@@ -294,6 +342,9 @@ module.exports = {
   'https://www.facebook.com/brandpage/posts/pfbid0likes': fbReactionsPage,
   'https://www.facebook.com/brandpage/posts/pfbid0shares': fbSharesPage,
   'https://www.facebook.com/brandpage/posts/pfbid0flow': fbFlowPage,
+  'https://www.facebook.com/brandpage/posts/pfbid0count': fbCountPage,
+  'https://www.facebook.com/brandpage/posts/pfbid0more': fbMorePage,
+  'https://evil.example/': evilPage,
   'https://x.com/brand/status/111': xPostPage,
   'https://x.com/brand/status/222': xFlowPage,
   'https://x.com/brand/status/111/likes': xLikesPage,

@@ -41,7 +41,8 @@ const sample = (name) => {
   check(anchors.length >= 6 && !brokenAnchors.length, 'home: every # link has a target ' + JSON.stringify(brokenAnchors));
   check((await htxt('.meta')).includes('v' + VER) && (await htxt('#whats-new h3')) === 'v' + VER + ' 更新了', 'home: shows the newest tool version v' + VER);
   const combo = await home.$$eval('#combo ol.steps > li', ls => ls.map(l => l.textContent));
-  check(combo.length === 4 && combo[1].includes('在工具上按「按讚」') && combo[3].includes('需要留言') && combo[3].includes('需要分享'), 'home: step-by-step 留言＋按讚＋分享 walkthrough ' + JSON.stringify(combo.map(t => t.slice(0, 6))));
+  check(combo.length === 4 && combo[0].includes('送到抽獎系統') && combo[1].includes('在工具上按「按讚」') && combo[3].includes('需要留言') && combo[3].includes('需要分享'), 'home: step-by-step 留言＋按讚＋分享 walkthrough ' + JSON.stringify(combo.map(t => t.slice(0, 6))));
+  check(!(await home.$eval('#use', m => m.textContent)).includes('跑完後按「複製結果」') && await home.isHidden('#phone-note'), 'home: the guides say 送到抽獎系統; no phone note on a computer');
   check(!(await home.$eval('main', m => m.textContent)).includes('再按一次書籤'), 'home: no more 「再按一次書籤」');
   check(await home.$eval('.foot a', a => a.href) === REPO && (await htxt('.foot')).includes('v' + VER), 'home: footer links to the GitHub repository');
   const bm = bookmarklet();
@@ -286,7 +287,7 @@ const sample = (name) => {
   await ctxD.close();
 
   // ---------- Phones, dark mode, reduced motion ----------
-  const ctxM = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark', deviceScaleFactor: 1 });
+  const ctxM = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark', deviceScaleFactor: 1, isMobile: true, hasTouch: true });
   await serveSite(ctxM);
   const pm = await ctxM.newPage();
   watch(pm, 'mobile');
@@ -296,6 +297,12 @@ const sample = (name) => {
   const bg = await pm.evaluate(() => getComputedStyle(document.body).backgroundColor);
   check(ov <= 0 && bg === 'rgb(17, 21, 28)', 'home: no horizontal overflow on phones, dark background (' + ov + ', ' + bg + ')');
   check(await pm.isVisible('.topnav .btn') && await pm.isVisible('#theme-toggle') && await pm.isHidden('.topnav a[href="#faq"]'), 'home: phones keep 黑底／白底 and 開始抽獎 in the top bar');
+  const note = await pm.evaluate(() => { const n = document.getElementById('phone-note'), r = n.getBoundingClientRect(); return { shown: !n.hidden, top: Math.round(r.top), text: n.textContent, url: document.getElementById('phone-url').textContent }; });
+  check(note.shown && note.top < 200 && note.text.includes('抓名單要用電腦') && note.url === SITE, 'home: a phone sees first that collecting needs a computer, with the address ' + JSON.stringify({ top: note.top, url: note.url }));
+  await pm.tap('#btn-copy-url');
+  await pm.waitForTimeout(200);
+  check(/已複製網址|已選取網址/.test(await pm.$eval('#toast', n => n.textContent)), 'home: 複製網址 on a phone copies (or selects) the address');
+  await pm.screenshot({ path: path.join(OUT, 'shot-home-phone-note.png') });
   await pm.screenshot({ path: path.join(OUT, 'shot-home-mobile-dark.png'), fullPage: true });
   await pm.goto(SITE + 'draw.html');
   await pm.waitForTimeout(300);

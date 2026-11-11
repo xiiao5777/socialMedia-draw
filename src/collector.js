@@ -1,13 +1,14 @@
 // 抽獎名單抓取工具 — bookmarklet source.
 // Runs on the open Facebook / X / Threads page, expands comments, collects
-// commenters (or a likes / shares list), and copies a JSON result that the
-// 抽獎系統 page imports on paste. build.js minifies it into the bookmark on index.html.
+// commenters (or a likes / shares list), and sends the JSON result to the 抽獎系統 page
+// (or copies it, for pasting there). build.js minifies it into the bookmark on index.html.
 (function () {
   'use strict';
   // Keep in step with COLLECTOR_VERSION in draw.html (build.js checks).
-  var VERSION = '1.3';
+  var VERSION = '1.4';
   // The 抽獎系統 page, filled in by build.js from the site address.
   var DRAW_URL = '__DRAW_URL__';
+  var DRAW_ORIGIN = (DRAW_URL.match(/^https:\/\/[^/]+/) || [''])[0];
   var HOST_ID = 'giveaway-collector-host';
   var prev = document.getElementById(HOST_ID);
   if (prev) {
@@ -293,15 +294,101 @@
   }
   function onListPage() { return platform === 'x' && /\/status\/\d+\/(likes|retweets|reposts|quotes)\/?$/.test(location.pathname); }
 
+  // ---------- the post's own numbers ----------
+  // How many comments / likes / shares the site says the post has, when the page shows it. A run
+  // stops as soon as it has them all, waits longer while it has fewer, and says so if it ends short.
+  // Kept in S.counts for the post: X shows them on the post, not on its /likes page.
+  // { n, exact }: exact is false for rounded numbers such as 1.2K or 1.2萬.
+  function countOf(s) {
+    var m = /^(\d[\d.,]*) ?([KkMm萬万]?)$/.exec(String(s || '').replace(/\s+/g, ' ').trim());
+    if (!m) return null;
+    var u = { k: 1e3, m: 1e6, '萬': 1e4, '万': 1e4 }[m[2].toLowerCase()];
+    if (u) return { n: Math.round(parseFloat(m[1].replace(/,/g, '')) * u), exact: false };
+    return /^\d+$|^\d{1,3}([.,]\d{3})+$/.test(m[1]) ? { n: +m[1].replace(/\D/g, ''), exact: true } : null;
+  }
+  var FB_COUNT = {
+    comment: /^(\d[\d.,]*\s*[KkMm萬万]?)\s*(?:則|条|條|個|个)?\s*(?:留言|評論|评论|comments?|komen)$/i,
+    share: /^(\d[\d.,]*\s*[KkMm萬万]?)\s*(?:次|个|個)?\s*(?:分享|shares?|perkongsian|kongsi)$/i
+  };
+  // X labels the post's buttons "12 replies, 3 reposts, 45 likes, ..."; Threads puts a number next to each icon.
+  var X_COUNT = {
+    comment: /(\d[\d.,]*\s*[KkMm萬万]?)\s*(?:則|个|個|條|条)?\s*(?:回覆|回复|repl)/i,
+    like: /(\d[\d.,]*\s*[KkMm萬万]?)\s*(?:個|个|次)?\s*(?:喜歡|喜欢|讚|赞|like)/i,
+    share: /(\d[\d.,]*\s*[KkMm萬万]?)\s*(?:則|个|個|次)?\s*(?:轉發|转发|轉貼|转帖|轉推|repost|retweet)/i
+  };
+  var TH_ICON = { comment: /^(回覆|回复|reply|comment)$/i, like: /^(讚|赞|like)$/i, share: /^(轉發|转发|repost)$/i };
+  // A short label such as 「256 則留言」, found from the text nodes that have a number in them.
+  function countText(root, re, skip) {
+    var w = document.createTreeWalker(root, 4), seen = new Set(), node;
+    while ((node = w.nextNode())) {
+      if (!/\d/.test(node.data)) continue;
+      for (var e = node.parentElement, up = 0; e && up < 3 && !seen.has(e); e = e.parentElement, up++) {
+        seen.add(e);
+        var t = e.textContent;
+        if (t.length > 40) break;
+        var m = re.exec(t.replace(/\s+/g, ' ').trim()), c = m && !(skip && skip(e)) && countOf(m[1]);
+        if (c) return c;
+      }
+    }
+    return null;
+  }
+  function fbCounts() {
+    var post = commentScope(), list = openList(), c;
+    if ((c = countText(post, FB_COUNT.comment, inComment))) S.counts.comment = c;
+    if ((c = countText(post, FB_COUNT.share, function (e) { return inComment(e) || (!!list && list.scope !== post && list.scope.contains(e)); }))) S.counts.share = c;
+    // The likes list's first tab: 「全部 256」
+    if (list && list.kind === 'like') {
+      $$(list.scope, '[role="tab"]').some(function (t) {
+        var m = /^(?:全部|所有|all|semua)\s*(\d[\d.,]*\s*[KkMm萬万]?)$/i.exec(txt(t));
+        return !!(m && (c = countOf(m[1])) && (S.counts.like = c));
+      });
+    }
+  }
+  function xCounts() {
+    var id = mainPostId();
+    var art = $$(document, 'article').filter(function (a) { return xStatusId(a) === id; })[0];
+    var g = art && art.querySelector('[role="group"][aria-label]');
+    var l = g ? g.getAttribute('aria-label') : '';
+    for (var k in X_COUNT) { var m = l && X_COUNT[k].exec(l), c = m && countOf(m[1]); if (c) S.counts[k] = c; }
+  }
+  function thCounts() {
+    var id = mainPostId();
+    var main = timeContainers(document).filter(function (c) { return postIdOf(c) === id; })[0];
+    // The post alone on the page (its likes list open on top): the nearest box around its time with the icons.
+    if (!main) {
+      var t = $$(document, 'time').filter(function (x) { var a = x.closest('a[href]'); return a && (a.getAttribute('href').match(/\/post\/([A-Za-z0-9_-]+)/) || [])[1] === id; })[0];
+      for (var e = t; e && e !== document.body && !main; e = e.parentElement) if (e.querySelector('svg[aria-label]')) main = e;
+    }
+    if (main) {
+      $$(main, 'svg[aria-label]').forEach(function (s) {
+        var l = s.getAttribute('aria-label'), c = countOf(txt(s.closest('[role="button"]') || s.parentElement));
+        for (var k in TH_ICON) if (c && TH_ICON[k].test(l)) S.counts[k] = c;
+      });
+    }
+  }
+  function readCounts() {
+    var key = mainPostId() || location.pathname + location.search;
+    if (S.countsFor !== key) { S.counts = {}; S.countsFor = key; }
+    try { (platform === 'x' ? xCounts : platform === 'threads' ? thCounts : fbCounts)(); } catch (e) { /* only a help */ }
+  }
+  // Entries found so far, as the post counts them: on X and Threads its number includes the author's
+  // own replies, which are skipped.
+  function got() { return S.store.size + (S.kind === 'comment' ? S.skippedOwner.size : 0); }
+
   // ---------- collectors ----------
   // run: bumped for every new run, so a run that was replaced stops touching the panel.
   // wait: timer while waiting for the person to open a likes / shares list.
   // results: the finished list for each kind, kept while the panel stays open.
+  // counts / expect: the post's numbers (see readCounts) and the one for this run. stop: why the run
+  // ended ('count', 'time' or 'user'). at: when this list was first finished; 繼續抓 keeps it, so the
+  // 抽獎系統 replaces the shorter list it got before. lastRes: the result 繼續抓 adds to.
+  // noSend: this site does not let the 抽獎系統 answer, so 送到抽獎系統 is not offered again.
   var S = {
     kind: 'comment', scope: document, quotes: false,
     store: new Map(), skipIds: new Set(), skippedOwner: new Set(),
     owner: ownerHandle(), running: false, lastEl: null,
-    run: 0, wait: null, results: {}, summary: '', notes: [], stale: null
+    run: 0, wait: null, results: {}, summary: '', notes: [], stale: null,
+    counts: {}, countsFor: '', expect: null, stop: '', at: '', lastRes: null, noSend: false
   };
   function put(key, item, el) {
     var cur = S.store.get(key);
@@ -319,13 +406,11 @@
   function isOwner(handle) { return !!(S.owner && handle && handle.toLowerCase() === S.owner); }
 
   // Facebook comments: [role=article] blocks labelled as comments/replies, or nested in the post.
-  function fbCommentArticles(scope) {
-    return $$(scope, '[role="article"]').filter(function (a) {
-      var label = a.getAttribute('aria-label') || '';
-      var nested = a.parentElement && a.parentElement.closest('[role="article"]');
-      return /留言|回覆|回复|评论|評論|comment|reply/i.test(label) || !!nested;
-    });
+  function isCommentArt(a) {
+    return /留言|回覆|回复|评论|評論|comment|reply/i.test(a.getAttribute('aria-label') || '') || !!(a.parentElement && a.parentElement.closest('[role="article"]'));
   }
+  function fbCommentArticles(scope) { return $$(scope, '[role="article"]').filter(isCommentArt); }
+  function inComment(e) { var a = e.closest('[role="article"]'); return !!a && isCommentArt(a); }
   function ownedBy(el, art) { return el.closest('[role="article"]') === art; }
   function fbHarvestComments(scope) {
     fbCommentArticles(scope).forEach(function (art) {
@@ -626,7 +711,7 @@
   function resultText() {
     var o = {
       giveaway: 'list', v: 1, tool: VERSION, platform: platform, kind: S.kind,
-      page: location.origin + location.pathname, at: new Date().toISOString(), items: items()
+      page: location.origin + location.pathname, at: S.at, items: items()
     };
     var av = avatarsMap();
     if (av) o.avatars = av;
@@ -720,6 +805,9 @@
   panel.appendChild(status);
   var tip = mk('div', { fontSize: '12.5px', background: C.soft, color: C.ink, borderRadius: '8px', padding: '8px 10px', display: 'none', whiteSpace: 'pre-line' });
   panel.appendChild(tip);
+  // A run that may have missed some (fewer than the post says, stopped, or out of time): 繼續抓.
+  var moreBox = mk('div', { display: 'none', fontSize: '12.5px', color: C.ink, border: '1px solid ' + C.gold, borderRadius: '8px', padding: '8px 10px' });
+  panel.appendChild(moreBox);
   // Big green confirmation once the result is on the clipboard.
   var okBox = mk('div', { display: 'none', fontSize: '14px', fontWeight: '700', lineHeight: '1.5', background: '#E3F4EA', color: '#14532D', border: '1px solid ' + C.ok, borderRadius: '8px', padding: '10px 12px' });
   okBox.setAttribute('role', 'status');
@@ -740,8 +828,10 @@
   function setStatus(s) { status.textContent = s; }
   function setTip(s) { tip.textContent = s || ''; css(tip, { display: s ? 'block' : 'none' }); }
   // withLink adds an 「打開抽獎系統」 button under the message (after copying the result).
-  function showOk(s, withLink) {
+  // warn: orange, for a result the 抽獎系統 could not take.
+  function showOk(s, withLink, warn) {
     okBox.textContent = s || '';
+    css(okBox, warn ? { background: '#FDF0E1', color: '#7A3A0B', borderColor: '#C2410C' } : { background: '#E3F4EA', color: '#14532D', borderColor: C.ok });
     if (s && withLink && /^https:\/\//.test(DRAW_URL)) {
       var a = mk('a', { display: 'inline-block', marginTop: '8px', padding: '6px 12px', borderRadius: '6px', background: C.ok, color: '#FFFFFF', fontSize: '13.5px', fontWeight: '700', textDecoration: 'none', cursor: 'pointer' }, '打開抽獎系統 ↗');
       a.href = DRAW_URL;
@@ -784,10 +874,16 @@
       var on = S.kind === k;
       css(modeBtns[k], { background: on ? C.bg : 'transparent', color: on ? C.ink : C.muted, fontWeight: on ? '700' : '400', boxShadow: on ? '0 1px 2px rgba(0,0,0,.12)' : 'none' });
     });
-    countUnit.textContent = S.kind === 'comment' ? '則留言' : (S.kind === 'like' ? '位按讚的人' : '位分享的人');
+    countUnit.textContent = unitText();
     where.textContent = PLATFORM_LABEL[platform] + '・' + (inDialog() ? '目前打開的視窗' : '目前頁面');
   }
-  function updateCount() { countNum.textContent = String(S.store.size); }
+  function unitText() { return S.kind === 'comment' ? '則留言' : (S.kind === 'like' ? '位按讚的人' : '位分享的人'); }
+  // 「230 / 256 則留言」 when the post's number is known
+  function setCount(n, e, own) {
+    countNum.textContent = String(n);
+    countUnit.textContent = (e ? '/ ' + (e.exact ? '' : '約 ') + Math.max(0, e.n - own) + ' ' : '') + unitText();
+  }
+  function updateCount() { setCount(S.store.size, S.expect, got() - S.store.size); }
   function listScope() {
     var d = detect();
     if (d.kind !== 'comment') return d.scope;
@@ -841,22 +937,23 @@
   function stopWait() {
     if (S.wait) { clearInterval(S.wait); S.wait = null; }
   }
-  function waitFor(k) {
+  function waitFor(k, more) {
     S.kind = k;
     S.scope = document;
-    S.store = new Map();
+    if (!more) S.store = new Map();
     S.stale = platform === 'x' && k !== 'comment' ? staleNow() : null;
     renderMode();
     where.textContent = PLATFORM_LABEL[platform] + '・' + (k === 'comment' ? '等你回到貼文' : '等你打開名單');
     css(countRow, { display: 'none' });
     showOk('');
+    showMore('');
     showNext(false);
     css(box, { display: 'none' });
-    setActions([{ label: k === 'comment' ? '直接抓留言' : '名單已經打開了', primary: false, onClick: function () { S.stale = null; setKind(k); start(); } }]);
+    setActions([{ label: k === 'comment' ? '直接抓留言' : '名單已經打開了', primary: false, onClick: function () { S.stale = null; setKind(k); start(more); } }]);
     var shown = '';
     function check() {
       if (!host.isConnected) { stopWait(); return; }
-      if (ready(k)) { stopWait(); setKind(k); start(); return; }
+      if (ready(k)) { stopWait(); setKind(k); start(more); return; }
       var t = waitText(k);
       if (t.join('|') === shown) return;
       shown = t.join('|');
@@ -877,22 +974,23 @@
     if (!again && S.results[k]) { showResult(S.results[k]); return; }
     if (ready(k)) { setKind(k); start(); } else waitFor(k);
   }
-  // A finished list: its count, summary and the copy button.
+  // A finished list: its count, summary, 送到抽獎系統 and the copy button.
   function showResult(res) {
     S.kind = res.kind;
     S.summary = res.summary;
     renderMode();
     css(countRow, { display: 'flex' });
-    countNum.textContent = String(res.n);
+    setCount(res.n, res.e, res.own);
     setStatus(res.summary);
     setTip(res.tip);
     showOk('');
+    showMore(res === S.lastRes ? res.more : '');
     showNext(false);
     css(box, { display: 'none' });
-    var acts = [
-      { label: '複製結果', primary: true, copy: true, onClick: function () { copyText(res.text, markCopied); } },
-      { label: '重新抓取', primary: false, onClick: function () { choose(res.kind, true); } }
-    ];
+    var acts = [];
+    if (DRAW_ORIGIN && !S.noSend) acts.push({ label: '送到抽獎系統', primary: true, onClick: function () { sendToDraw(res, this); } });
+    acts.push({ label: '複製結果', primary: !acts.length, copy: true, onClick: function () { copyText(res.text, markCopied); } });
+    acts.push({ label: '重新抓取', primary: false, onClick: function () { choose(res.kind, true); } });
     if (res.diag) {
       acts.push({ label: '複製診斷資訊', primary: false, onClick: function () {
         copyText(res.diag, function () { showOk('✓ 已複製診斷資訊，可以直接貼給開發者。'); });
@@ -900,16 +998,35 @@
     }
     setActions(acts);
   }
+  function showMore(s) {
+    while (moreBox.firstChild) moreBox.removeChild(moreBox.firstChild);
+    css(moreBox, { display: s ? 'block' : 'none' });
+    if (!s) return;
+    moreBox.appendChild(document.createTextNode(s));
+    var b = mk('button', btnStyle(false), '繼續抓');
+    css(b, { display: 'block', marginTop: '6px', fontSize: '13px', padding: '5px 12px' });
+    b.addEventListener('click', goOn);
+    moreBox.appendChild(b);
+  }
+  // 繼續抓: the same list again from where it stopped, keeping what was found (a likes or shares
+  // list that was closed meanwhile is waited for first).
+  function goOn() {
+    var k = S.kind;
+    stopWait();
+    S.run++;
+    S.stale = null;
+    if (ready(k)) { setKind(k); start(true); } else waitFor(k, true);
+  }
   function showNext(on) {
     while (nextBox.firstChild) nextBox.removeChild(nextBox.firstChild);
     css(nextBox, { display: on ? 'block' : 'none' });
     if (!on) return;
     var left = ['comment', 'like', 'share'].filter(function (k) { return !S.results[k]; });
     if (!left.length) {
-      nextBox.textContent = '留言、按讚、分享三份名單都抓好了。都貼到抽獎系統之後，記得在第 2 步勾選參加條件。';
+      nextBox.textContent = '留言、按讚、分享三份名單都抓好了。都加進抽獎系統之後，記得在第 2 步勾選參加條件。';
       return;
     }
-    nextBox.appendChild(document.createTextNode('貼好之後，還要抓' + left.map(function (k) { return KIND_LABEL[k]; }).join('或') + '的人，就按：'));
+    nextBox.appendChild(document.createTextNode('還要抓' + left.map(function (k) { return KIND_LABEL[k]; }).join('或') + '的人，就按：'));
     var row = mk('div', { display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' });
     left.forEach(function (k) {
       var b = mk('button', btnStyle(false), '抓' + KIND_LABEL[k]);
@@ -918,6 +1035,48 @@
       row.appendChild(b);
     });
     nextBox.appendChild(row);
+  }
+
+  // ---------- send to the 抽獎系統 ----------
+  // Opens the draw page (or the tab it opened before) and hands it the result with postMessage: the
+  // page answers 'ready' once it listens, then 'ack' with what it did. A blocked pop-up copies the
+  // result instead; a page that never answers (some sites cut the link to pages they open) leaves
+  // 複製結果 to press.
+  function sendToDraw(res, btn) {
+    var w = null, id = String(Math.random()).slice(2), t0 = Date.now(), sent = 0, iv = null;
+    try { w = window.open(DRAW_URL + '#receive', 'giveaway-draw'); } catch (e) { w = null; }
+    if (!w) { copyText(res.text, markCopied); return; }
+    btn.disabled = true;
+    setStatus('正在送到抽獎系統…');
+    function end(d) {
+      clearInterval(iv);
+      window.removeEventListener('message', onMsg);
+      btn.disabled = false;
+      setStatus(res.summary);
+      if (d && d.ok) {
+        showOk('✓ 已送到抽獎系統：' + d.msg);
+        showNext(true);
+        btn.textContent = '✓ 已送出';
+        css(btn, { background: C.ok, borderColor: C.ok });
+      } else showOk(d ? String(d.msg) : '沒辦法直接送過去。請按「複製結果」，再到抽獎系統第 1 步貼上。', false, true);
+    }
+    function onMsg(e) {
+      var d = e.data;
+      if (e.origin !== DRAW_ORIGIN || e.source !== w || !d || d.giveaway !== 'draw' || d.id !== id) return;
+      if (d.type === 'ready' && !sent) {
+        sent = Date.now();
+        w.postMessage({ giveaway: 'tool', type: 'send', id: id, text: res.text }, DRAW_ORIGIN);
+      }
+      if (d.type === 'ack') end(d);
+    }
+    window.addEventListener('message', onMsg);
+    iv = setInterval(function () {
+      var gone = false;
+      try { gone = w.closed; } catch (e) { /* keep trying */ }
+      if (gone && Date.now() - t0 < 1500) S.noSend = true;
+      if (gone || Date.now() - (sent || t0) > (sent ? 30000 : 15000)) { end(null); return; }
+      if (!sent) { try { w.postMessage({ giveaway: 'tool', type: 'hello', id: id }, DRAW_ORIGIN); } catch (e) { /* not loaded yet */ } }
+    }, 300);
   }
 
   // ---------- copy ----------
@@ -951,34 +1110,44 @@
   }
 
   // ---------- run ----------
-  async function start() {
+  // more: 繼續抓, which keeps the entries found so far and carries on from where the page is.
+  async function start(more) {
     stopWait();
     var my = ++S.run;
     delete S.results[S.kind];
-    S.store = new Map();
-    S.skippedOwner = new Set();
-    S.lastEl = null;
+    S.lastRes = null;
+    if (!more) {
+      S.store = new Map();
+      S.skippedOwner = new Set();
+      S.lastEl = null;
+      S.notes = [];
+      S.at = '';
+    }
+    clicks = new WeakMap();
     S.summary = '';
-    S.notes = [];
+    S.stop = '';
     S.running = true;
+    readCounts();
+    S.expect = S.counts[S.kind] || null;
     renderMode();
     css(countRow, { display: 'flex' });
     updateCount();
-    setTip('');
+    setTip(S.notes.join('\n'));
     showOk('');
+    showMore('');
     showNext(false);
     css(box, { display: 'none' });
     setActions([{ label: '停止', primary: false, onClick: function () { S.running = false; } }]);
-    if (S.kind === 'comment') initSkip();
-    if (S.kind === 'comment' && platform === 'facebook') {
+    if (!more && S.kind === 'comment') initSkip();
+    if (!more && S.kind === 'comment' && platform === 'facebook') {
       setStatus('正在把留言排序改成「所有留言」…');
       var r = await fbAllComments(S.scope);
       if (my !== S.run) return;
       if (r === 'failed') note('沒辦法自動切換成「所有留言」。請手動把留言排序改成「所有留言」再按「重新抓取」，不然 FB 可能會藏起部分留言。');
     }
-    if (S.kind === 'comment' && (platform === 'x' || platform === 'threads')) window.scrollTo(0, 0);
+    if (!more && S.kind === 'comment' && (platform === 'x' || platform === 'threads')) window.scrollTo(0, 0);
     setStatus(S.kind === 'comment' ? '正在展開並讀取留言，請不要關閉這個分頁…' : '正在往下捲動名單並讀取…');
-    var t0 = Date.now(), idle = 0;
+    var t0 = Date.now(), idle = 0, calm = 0, loops = 0;
     while (S.running) {
       var before = S.store.size;
       harvest();
@@ -988,11 +1157,25 @@
       if (my !== S.run) return; // replaced by another run, or the panel was closed
       if (!S.running) break;
       harvest();
+      // The number may show up a moment after the page
+      if (!S.expect && ++loops <= 12 && loops % 4 === 0) { readCounts(); S.expect = S.counts[S.kind] || null; }
       updateCount();
+      calm = S.store.size > before ? 0 : calm + 1;
       // Clicking alone is not progress: a button that loads nothing must not keep the run alive.
       if (S.store.size > before || moved) idle = 0; else idle++;
-      if (idle >= 7) break;
-      if (Date.now() - t0 > 8 * 60 * 1000) { note('已經抓了 8 分鐘，先停在這裡。'); break; }
+      // As many as the post says: done, once two more rounds bring nothing new. Fewer: keep trying
+      // a little longer before giving up.
+      var left = S.expect ? S.expect.n - got() : 0;
+      if (S.expect && S.expect.exact && left <= 0 && calm >= 2) { S.stop = 'count'; break; }
+      if (idle >= (left > 0 ? 12 : 7)) break;
+      if (Date.now() - t0 > 8 * 60 * 1000) { S.stop = 'time'; break; }
+    }
+    if (!S.running) S.stop = 'user';
+    // Everything is there: open the long comments that still end in 「查看更多」
+    for (var i = 0; S.stop === 'count' && S.kind === 'comment' && i < 5 && expand(); i++) {
+      await sleep(900);
+      if (my !== S.run) return;
+      harvest();
     }
     harvest();
     finish(my);
@@ -1058,6 +1241,7 @@
       : '抓到 ' + n + ' 位' + (S.kind === 'like' ? '按讚' : '分享') + '的人。';
     if (S.skippedOwner.size) summary += '已略過貼文作者自己的 ' + S.skippedOwner.size + ' 則回覆。';
     summary += '頭像 ' + avOk + ' / ' + people.length + ' 張。';
+    if (!S.at) S.at = new Date().toISOString();
     var text = resultText();
     try { window.__giveawayResult = text; } catch (e) { /* ignore */ }
     var tips = S.notes.slice();
@@ -1065,15 +1249,19 @@
     if (S.kind !== 'comment' && !inDialog() && !onListPage()) tips.push('沒有找到名單視窗，結果可能把頁面上的其他人（例如留言的人）也算進去，請確認人數對不對。');
     var fewAvatars = avOk < people.length / 2;
     if (fewAvatars) tips.push('有些頭像抓不到（網站不讓其他網頁讀取圖片），抽獎系統會用名字的第一個字代替，不影響抽獎。');
-    var res = { kind: S.kind, n: n, text: text, summary: summary, tip: tips.join('\n'), diag: fewAvatars ? diagText() : '' };
+    // Fewer than the post says, stopped, or out of time: say so, with 繼續抓
+    var e = S.expect, own = got() - n, short = e ? e.n - got() : 0;
+    var goOnText = '按「繼續抓」可以接著抓，已經抓到的會留著。';
+    var more = S.stop === 'user' ? '已經停止。' : S.stop === 'time' ? '已經抓了 8 分鐘，先停一下。' : '';
+    if (short > 0) {
+      more += '貼文上顯示' + (e.exact ? ' ' : '約 ') + (e.n - own) + { comment: ' 則留言', like: ' 個讚', share: ' 次分享' }[S.kind] + '，這次抓到 ' + n + '。' +
+        (S.kind === 'share' ? '不公開的分享看不到，少一些是正常的。' : '差幾個是正常的（已刪除或看不到的）。') + '差很多的話，' + goOnText;
+    } else if (more) more += goOnText;
+    else if (!e) more = '比貼文上的數量少？' + goOnText;
+    var res = { kind: S.kind, n: n, e: e, own: own, text: text, summary: summary, tip: tips.join('\n'), more: more, diag: fewAvatars ? diagText() : '' };
     S.results[S.kind] = res;
+    S.lastRes = res;
     showResult(res);
-    function askToCopy() { if (my === S.run && okBox.style.display === 'none') setStatus(summary + '按「複製結果」，再到抽獎系統第 1 步貼上。'); }
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText && document.hasFocus()) {
-        navigator.clipboard.writeText(text).then(function () { if (my === S.run) markCopied(); }, askToCopy);
-      } else askToCopy();
-    } catch (e) { askToCopy(); }
   }
 
   // ---------- boot ----------
