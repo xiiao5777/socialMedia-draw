@@ -232,15 +232,17 @@ function xPostPage() {
     const focal = { id: '111', handle: 'brand', name: 'Brand', text: '抽獎！回覆我要抽並標記 2 位朋友', focal: true, stats: '34 replies, 12 reposts, 25 likes, 3 bookmarks, 4512 views' };
     const replies = ${JSON.stringify(replies)};
     const hiddenMore = ${JSON.stringify(hiddenMore)};
-    let loaded = 8, start = 0, extra = false;
+    // X folds replies away behind buttons, one after another (its English one is long): one reply each
+    const folds = ['Show more replies', 'Show additional replies, including those that may contain offensive content', '顯示可能是垃圾訊息的回覆'];
+    let loaded = 8, start = 0, extra = 0;
     const feed = document.getElementById('feed');
     function draw() {
       // virtualized: keep at most 10 replies in the DOM, earlier ones become a spacer
-      const all = replies.slice(0, loaded).concat(extra ? hiddenMore : []);
+      const all = replies.slice(0, loaded).concat(hiddenMore.slice(0, extra));
       start = Math.max(0, all.length - 10);
       let html = start === 0 ? __xArticle(parent) + __xArticle(focal) : '<div style="height:' + (start * 120) + 'px"></div>';
       html += all.slice(start).map(__xArticle).join('');
-      if (loaded >= replies.length && !extra) html += '<div role="button" id="showmore"><span>Show more replies</span></div>';
+      if (loaded >= replies.length && extra < folds.length) html += '<div role="button" id="showmore"><span>' + folds[extra] + '</span></div>';
       feed.innerHTML = html;
       document.querySelectorAll('article').forEach(a => a.style.height = '110px');
     }
@@ -251,7 +253,7 @@ function xPostPage() {
       }
     });
     document.addEventListener('click', (e) => {
-      if (e.target.closest('#showmore')) setTimeout(() => { extra = true; draw(); }, 300);
+      if (e.target.closest('#showmore')) setTimeout(() => { extra++; draw(); }, 300);
     });
   </script></body></html>`;
 }
