@@ -5,7 +5,7 @@
 (function () {
   'use strict';
   // Keep in step with COLLECTOR_VERSION in draw.html (build.js checks).
-  var VERSION = '1.6';
+  var VERSION = '1.7';
   // The 抽獎系統 page, filled in by build.js from the site address.
   var DRAW_URL = '__DRAW_URL__';
   var DRAW_ORIGIN = (DRAW_URL.match(/^https:\/\/[^/]+/) || [''])[0];
@@ -803,10 +803,6 @@
 
   var status = mk('div', { fontSize: '13px', color: C.muted });
   panel.appendChild(status);
-  // The avatars found, in small grey type: missing ones are normal, so no warning colours. 複製診斷資訊
-  // sits at the end of the line, for the developer when many are missing.
-  var avLine = mk('div', { display: 'none', fontSize: '12px', color: C.muted, marginTop: '-6px' });
-  panel.appendChild(avLine);
   var tip = mk('div', { fontSize: '12.5px', background: C.soft, color: C.ink, borderRadius: '8px', padding: '8px 10px', display: 'none', whiteSpace: 'pre-line' });
   panel.appendChild(tip);
   // A run that may have missed some (fewer than the post says, stopped, or out of time): 繼續抓.
@@ -830,17 +826,6 @@
   close.addEventListener('click', function () { host.__gcStop(); host.remove(); });
 
   function setStatus(s) { status.textContent = s; }
-  function setAvLine(res) {
-    while (avLine.firstChild) avLine.removeChild(avLine.firstChild);
-    css(avLine, { display: res ? 'block' : 'none' });
-    if (!res) return;
-    avLine.appendChild(document.createTextNode(res.av));
-    if (!res.diag) return;
-    var b = mk('button', { border: '0', background: 'transparent', padding: '0', marginLeft: '6px', font: 'inherit', color: C.muted, textDecoration: 'underline', cursor: 'pointer' }, '複製診斷資訊');
-    b.type = 'button';
-    b.addEventListener('click', function () { copyText(res.diag, function () { showOk('✓ 已複製診斷資訊，可以直接貼給開發者。'); }); });
-    avLine.appendChild(b);
-  }
   // The key that pastes, as the draw page names it
   var PASTE_KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '') ? '⌘V' : 'Ctrl+V';
   function setTip(s) { tip.textContent = s || ''; css(tip, { display: s ? 'block' : 'none' }); }
@@ -963,7 +948,6 @@
     renderMode();
     where.textContent = PLATFORM_LABEL[platform] + '・' + (k === 'comment' ? '等你回到貼文' : '等你打開名單');
     css(countRow, { display: 'none' });
-    setAvLine(null);
     showOk('');
     showMore('');
     showNext(false);
@@ -1001,7 +985,6 @@
     css(countRow, { display: 'flex' });
     setCount(res.n, res.e);
     setStatus(res.summary);
-    setAvLine(res);
     setTip(res.tip);
     showOk('');
     showMore(res === S.lastRes ? res.more : '');
@@ -1147,7 +1130,6 @@
     renderMode();
     css(countRow, { display: 'flex' });
     updateCount();
-    setAvLine(null);
     setTip(S.notes.join('\n'));
     showOk('');
     showMore('');
@@ -1252,7 +1234,6 @@
     var people = peopleKeys();
     await waitAvatars(people, my);
     if (my !== S.run) return;
-    var avOk = people.filter(function (k) { return AV.data.has(k); }).length;
     var summary = S.kind === 'comment'
       ? '抓到 ' + n + ' 則留言，共 ' + people.length + ' 位不重複。'
       : '抓到 ' + n + ' 位' + (S.kind === 'like' ? '按讚' : '分享') + '的人。';
@@ -1263,8 +1244,6 @@
     var tips = S.notes.slice();
     // Read without a likes / shares list open (「名單已經打開了」 on a page with none).
     if (S.kind !== 'comment' && !inDialog() && !onListPage()) tips.push('沒有找到名單視窗，結果可能把頁面上的其他人（例如留言的人）也算進去，請確認人數對不對。');
-    var fewAvatars = avOk < people.length / 2;
-    var av = '頭像 ' + avOk + ' / ' + people.length + ' 張' + (avOk < people.length ? '，沒抓到的會用名字的第一個字代替，不影響抽獎。' : '。');
     // Fewer than the post says, stopped, or out of time: say so, with 繼續抓
     var e = S.expect, own = got() - n, short = e ? e.n - got() : 0;
     var goOnText = '按「繼續抓」可以接著抓，已經抓到的會留著。';
@@ -1274,13 +1253,16 @@
         (S.kind === 'share' ? '不公開的分享看不到，少一些是正常的。' : '差幾個是正常的（已刪除或看不到的）。') + '差很多的話，' + goOnText;
     } else if (more) more += goOnText;
     else if (!e) more = '比貼文上的數量少？' + goOnText;
-    var res = { kind: S.kind, n: n, e: e, own: own, text: text, summary: summary, av: av, tip: tips.join('\n'), more: more, diag: fewAvatars ? diagText() : '' };
+    var res = { kind: S.kind, n: n, e: e, own: own, text: text, summary: summary, tip: tips.join('\n'), more: more };
     S.results[S.kind] = res;
     S.lastRes = res;
     showResult(res);
   }
 
   // ---------- boot ----------
+  // The panel does not count avatars (missing ones fall back to the first letter, HW asked not to
+  // show it): when many are missing, the developer can ask for this in the console.
+  try { window.__giveawayDiag = diagText; } catch (e) { /* ignore */ }
   if (!platform) {
     setStatus('這個工具只能在 Facebook、X 或 Threads 的貼文頁面使用。');
     css(modes, { display: 'none' });

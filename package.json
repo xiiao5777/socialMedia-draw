@@ -1,6 +1,6 @@
 {
   "name": "socialmedia-draw",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "private": true,
   "description": "抽獎系統：Facebook、X、Threads 貼文抽獎網站和名單抓取工具",
   "scripts": {

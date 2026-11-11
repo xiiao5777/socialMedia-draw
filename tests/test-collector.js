@@ -120,7 +120,7 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   check(await avatarMatches(r.page, av['fb:peishan.li'], 'https://scontent.xx.fbcdn.net/v/t39.30808-1/peishan_li_n.jpg'), 'FB: emoji in a comment is not used as the avatar');
   check(await avatarMatches(r.page, av['fb:100045'], 'https://scontent.xx.fbcdn.net/v/t39.30808-1/profile_php_id_100045_n.jpg'), 'FB: profile.php person has the right avatar');
   check(!r.imgLog.some(l => l.cors && /photo_777|emoji\.php/.test(l.url)), 'FB: the collector never fetched the photo or the emoji');
-  check(/頭像 20 \/ 21 張，沒抓到的會用名字的第一個字代替/.test(r.panelText) && !/複製診斷資訊/.test(r.panelText), 'FB: a grey line reports avatars 20 / 21, no 複製診斷資訊 for one missing');
+  check(!/頭像/.test(r.panelText) && !/複製診斷資訊/.test(r.panelText), 'FB: the panel does not count avatars (20 of 21 came)');
   check(await countLine(r.page) === '22/ 22 則留言' && !await hasGoOn(r.page), 'FB: reads 「22 則留言」 on the post and shows 22 / 22, nothing left to 繼續抓 (' + await countLine(r.page) + ')');
   const mainBtn = await r.page.evaluate(() => { const b = document.getElementById('giveaway-collector-host').shadowRoot.querySelector('button[style*="rgb(198, 43, 43)"]'); return b && b.textContent; });
   check(mainBtn === '送到抽獎系統', 'FB: 送到抽獎系統 is the main (red) button (' + mainBtn + ')');
@@ -184,7 +184,7 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   // Facebook shares dialog (no pictures at all)
   r = await runOn(browser, 'https://www.facebook.com/brandpage/posts/pfbid0shares');
   check(r.result && r.result.kind === 'share' && r.result.items.length === 6, 'FB shares: 6 sharers, tagged friends ignored (got ' + (r.result && r.result.items.length) + ')');
-  check(r.result && !r.result.avatars && /頭像 0 \/ 6 張/.test(r.panelText), 'FB shares: no avatars, reported as 0 / 6');
+  check(r.result && !r.result.avatars && !/頭像/.test(r.panelText), 'FB shares: no avatars, and the panel does not say so');
   check(await hasGoOn(r.page) && /比貼文上的數量少？/.test(r.panelText), 'FB shares: no number to compare, 繼續抓 offered');
   await r.ctx.close();
 
@@ -248,15 +248,11 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   // Threads likes dialog: the picture server refuses other pages (no CORS)
   r = await runOn(browser, 'https://www.threads.com/@brandtw/post/DAbc123/likes');
   check(r.result && r.result.kind === 'like' && r.result.items.length === 12, 'Threads likes: 12 likers (got ' + (r.result && r.result.items.length) + ')');
-  check(r.result && !r.result.avatars && /頭像 0 \/ 12 張，沒抓到的會用名字的第一個字代替，不影響抽獎。複製診斷資訊/.test(r.panelText) && !/有些頭像抓不到/.test(r.panelText), 'Threads likes: avatars blocked, one grey line explains the letter fallback and offers 複製診斷資訊');
+  check(r.result && !r.result.avatars && !/頭像/.test(r.panelText) && !/複製診斷資訊/.test(r.panelText), 'Threads likes: avatars blocked, and the panel does not mention them');
   check(await countLine(r.page) === '12/ 12 位按讚的人', 'Threads likes: the post\'s like number behind the list, 12 / 12 (' + await countLine(r.page) + ')');
-  await r.ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'https://www.threads.com' });
-  await btn(r.page, '複製診斷資訊').click();
-  await r.page.waitForTimeout(300);
   let diag = null;
-  try { diag = JSON.parse(await r.page.evaluate(() => navigator.clipboard.readText())); } catch (e) { diag = null; }
-  check(diag && diag.avatars && diag.avatars.found === 12 && diag.avatars.failed === 12 && diag.avatars.hosts['cdninstagram.com'] === 12, 'Threads likes: diagnostics count the blocked avatars ' + JSON.stringify(diag && diag.avatars));
-  check(/已複製診斷資訊/.test(await panel(r.page)), 'Threads likes: diagnostics copy is confirmed');
+  try { diag = JSON.parse(await r.page.evaluate(() => window.__giveawayDiag())); } catch (e) { diag = null; }
+  check(diag && diag.avatars && diag.avatars.found === 12 && diag.avatars.failed === 12 && diag.avatars.hosts['cdninstagram.com'] === 12, 'Threads likes: the diagnostics, for the developer in the console, count the blocked avatars ' + JSON.stringify(diag && diag.avatars));
   check(!r.errors.length, 'Threads likes: no page errors ' + JSON.stringify(r.errors));
   await r.ctx.close();
 
