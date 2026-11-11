@@ -394,19 +394,20 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
 }
 .seg button[aria-checked="true"] { background: var(--surface); color: var(--ink); font-weight: 700; box-shadow: var(--shadow-sm); }
 
-.callout {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 14px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px dashed var(--line);
-  font-size: 13.5px;
-}
-.callout p { max-width: 52ch; }
-.callout a { color: var(--accent-text); font-weight: 500; }
+/* Step 1: how the lists get here (the 抓取工具), a box for its 「複製結果」, and the other ways, folded */
+.how { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 10px; background: var(--surface-2); font-size: 14px; }
+.how-title { font-weight: 700; }
+.how-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; counter-reset: how; }
+.how-steps li { counter-increment: how; display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; }
+.how-steps li::before { content: counter(how); width: 22px; height: 22px; margin-top: 1px; border-radius: 50%; display: grid; place-items: center; background: var(--ink); color: var(--surface); font-family: var(--font-mono); font-size: 12px; font-weight: 600; }
+.how-foot { color: var(--muted); font-size: 13px; }
+.how-foot a { color: var(--accent-text); font-weight: 500; }
+.import-next { font-size: 13.5px; }
+.quick-paste input { width: 100%; }
+.more-import { border-top: 1px solid var(--line); padding-top: 12px; }
+.more-import > summary { width: fit-content; cursor: pointer; color: var(--muted); font-size: 13.5px; font-weight: 500; }
+.more-import > summary:hover, .more-import[open] > summary { color: var(--ink); }
+.more-body { display: flex; flex-direction: column; gap: 14px; margin-top: 12px; }
 .preview {
   background: var(--surface-2);
   border-radius: 8px;
@@ -650,8 +651,8 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
 .ticket-no { flex: none; font-family: var(--font-mono); font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
 .ticket-body {
   position: relative;
-  min-height: 196px;
-  padding: 26px 22px;
+  min-height: 160px;
+  padding: 20px 22px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -954,33 +955,48 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
             <span class="step" aria-hidden="true">1</span>
             <div>
               <h2 id="h-import">匯入參加者</h2>
-              <p class="sub">分別貼上留言、按讚、分享的名單，同一個名字會自動合併成一位參加者。</p>
+              <p class="sub">用抓取工具把貼文的留言、按讚、分享名單送過來，同一個人會自動合併成一位參加者。</p>
             </div>
             <button class="btn btn-clear sec-act" type="button" id="btn-clear-lists" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M5.5 7l1 12.2A2 2 0 0 0 8.5 21h7a2 2 0 0 0 2-1.8L18.5 7M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7"/></svg>清空名單</button>
           </header>
           <p class="lock-note" hidden>抽獎已經開始，名單已鎖定。要修改的話，到「<a href="#draw">抽獎</a>」頁在得獎名單下面按「重新開始抽獎」。</p>
-          <div class="seg" role="radiogroup" aria-label="名單類型" id="import-type">
-            <button type="button" role="radio" data-type="comment" aria-checked="true">留言者</button>
-            <button type="button" role="radio" data-type="like" aria-checked="false">按讚者</button>
-            <button type="button" role="radio" data-type="share" aria-checked="false">分享者</button>
+          <div class="how" id="import-how">
+            <p class="how-title">名單這樣送過來：</p>
+            <ol class="how-steps">
+              <li><span>打開你的 Facebook、X 或 Threads 貼文。</span></li>
+              <li><span>按書籤列的「抓取抽獎名單」，等它抓完。</span></li>
+              <li><span>按工具上的「送到抽獎系統」，名單就會出現在這裡。</span></li>
+            </ol>
+            <p class="how-foot">書籤列還沒有「抓取抽獎名單」？<a href="./#install" target="_blank" rel="noopener">先安裝抓取工具</a></p>
           </div>
-          <div class="callout">
-            <p>用「名單抓取工具」在貼文頁面抓好名單，按工具上的「送到抽獎系統」就會直接加進來；也可以按「複製結果」，再貼到下面。</p>
-            <a href="./#install" target="_blank" rel="noopener">安裝抓取工具</a>
+          <div class="batches" id="batches" hidden></div>
+          <p class="import-next" id="import-next" hidden></p>
+          <div class="field quick-paste">
+            <label class="field-label" for="quick-paste">送不過去的話</label>
+            <input type="text" id="quick-paste" autocomplete="off" spellcheck="false" placeholder="在工具上按「複製結果」，再點這裡按 Ctrl+V 貼上">
           </div>
-          <div class="field">
-            <label class="field-label" for="paste" id="paste-label">貼上留言者名單</label>
-            <textarea id="paste" rows="6" spellcheck="false"></textarea>
-            <p class="hint" id="paste-hint"></p>
-          </div>
-          <div class="preview" id="preview" hidden></div>
-          <div class="row-actions">
-            <button class="btn btn-primary" type="button" id="btn-add">加入名單</button>
-            <button class="btn" type="button" id="btn-file">匯入 CSV 檔</button>
-            <input type="file" id="file" accept=".csv,.tsv,.txt,.json,text/csv,text/plain,application/json" hidden>
-          </div>
-          <p class="hint">Excel 存的 CSV 可以直接匯入。第一列可以用這些欄位：名字、帳號、留言、類型（留言／按讚／分享）。</p>
-          <div class="batches" id="batches"></div>
+          <details class="more-import" id="more-import">
+            <summary>其他匯入方式：手動貼上名單、匯入 CSV 檔</summary>
+            <div class="more-body">
+              <div class="seg" role="radiogroup" aria-label="名單類型" id="import-type">
+                <button type="button" role="radio" data-type="comment" aria-checked="true">留言者</button>
+                <button type="button" role="radio" data-type="like" aria-checked="false">按讚者</button>
+                <button type="button" role="radio" data-type="share" aria-checked="false">分享者</button>
+              </div>
+              <div class="field">
+                <label class="field-label" for="paste" id="paste-label">貼上留言者名單</label>
+                <textarea id="paste" rows="6" spellcheck="false"></textarea>
+                <p class="hint" id="paste-hint"></p>
+              </div>
+              <div class="preview" id="preview" hidden></div>
+              <div class="row-actions">
+                <button class="btn btn-primary" type="button" id="btn-add">加入名單</button>
+                <button class="btn" type="button" id="btn-file">匯入 CSV 檔</button>
+                <input type="file" id="file" accept=".csv,.tsv,.txt,.json,text/csv,text/plain,application/json" hidden>
+              </div>
+              <p class="hint">Excel 存的 CSV 可以直接匯入。第一列可以用這些欄位：名字、帳號、留言、類型（留言／按讚／分享）。</p>
+            </div>
+          </details>
         </section>
 
         <section class="panel area-people" id="sec-people" aria-labelledby="h-people">
@@ -1168,7 +1184,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
   var SUMMARY_KEY = 'giveaway-draw:summary';
   // Newest 名單抓取工具 version; build.js refuses to build when it differs from src/collector.js.
   // A pasted result from an older tool shows a banner asking to reinstall the bookmark.
-  var COLLECTOR_VERSION = '1.4';
+  var COLLECTOR_VERSION = '1.5';
   var TYPE_LABEL = { comment: '留言', like: '按讚', share: '分享' };
   var PLATFORM_LABEL = { facebook: 'Facebook', x: 'X', threads: 'Threads' };
   var PLACEHOLDER = {
@@ -1442,7 +1458,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
 
   // ---------- State ----------
   function defaultRules() {
-    return { needComment: true, needLike: false, needShare: false, needTag: false, tagCount: 1, needKeyword: false, keywords: '', keywordMode: 'any', exclude: '' };
+    return { needComment: false, needLike: false, needShare: false, needTag: false, tagCount: 1, needKeyword: false, keywords: '', keywordMode: 'any', exclude: '' };
   }
   function makeEmpty() {
     return {
@@ -1453,7 +1469,8 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
       prizes: [{ id: uid(), name: '頭獎', qty: 1 }],
       winners: [],
       log: [],
-      ui: { anim: true, importType: 'comment', filter: 'all', selectedPrize: null, lastWinnerId: null, oldTool: null }
+      // ruleSet: the 需要留言／按讚／分享 rules the person set by hand, which lists no longer change
+      ui: { anim: true, importType: 'comment', filter: 'all', selectedPrize: null, lastWinnerId: null, oldTool: null, ruleSet: {} }
     };
   }
   function makeSample() {
@@ -1502,6 +1519,8 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
   }
   function normalizeState(s) {
     var base = makeEmpty();
+    var ui = Object.assign(base.ui, s.ui || {});
+    if (!ui.ruleSet || typeof ui.ruleSet !== 'object') ui.ruleSet = {};
     return {
       v: 1,
       sample: !!s.sample,
@@ -1510,7 +1529,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
       prizes: Array.isArray(s.prizes) ? s.prizes.map(function (p) { return { id: String(p.id || uid()), name: String(p.name == null ? '' : p.name), qty: clampInt(p.qty, 1, 999, 1) }; }) : base.prizes,
       winners: Array.isArray(s.winners) ? s.winners : [],
       log: Array.isArray(s.log) ? s.log : [],
-      ui: Object.assign(base.ui, s.ui || {})
+      ui: ui
     };
   }
   // Saving. The giveaway is kept in localStorage, which holds about 5 MB. A big one (a post with
@@ -1979,11 +1998,13 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     });
     $('#btn-try').hidden = v !== 'setup';
     // Scrolled down when switching: start the other view at its top, right under the tab bar.
-    // 'top' always does that, so a phone shows the 抽出 1 位 button after 試抽看看.
+    // 'top' always does that, so a phone shows the 抽出 1 位 button after 試抽看看. So does 抽獎
+    // when that button would be below the screen (a laptop, from the top of 準備).
     if (scroll && shownView && (shownView !== v || scroll === 'top')) {
       var bar = $('.views-bar').offsetHeight;
       var top = $('.views-main').getBoundingClientRect().top;
-      if (top < bar || scroll === 'top') window.scrollTo(0, window.scrollY + top - bar - 10);
+      var low = v === 'draw' && $('#btn-draw').getBoundingClientRect().bottom > window.innerHeight;
+      if (top < bar || low || scroll === 'top') window.scrollTo(0, window.scrollY + top - bar - 10);
     }
     shownView = v;
   }
@@ -2094,8 +2115,14 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     var box = $('#batches');
     // 清空名單 sits at the top of step 1 and shows once there is a list to clear
     $('#btn-clear-lists').hidden = !state.batches.length;
+    // The steps to get a list here, until the person has one of their own; then what to do next
+    var own = state.batches.length > 0 && !state.sample;
+    $('#import-how').hidden = own;
+    $('#import-next').hidden = !own || state.winners.length > 0;
+    $('#import-next').textContent = own ? nextHint() : '';
+    box.hidden = !state.batches.length;
     if (!state.batches.length) {
-      box.replaceChildren(el('p', { class: 'hint' }, '還沒有名單。先貼上留言者名單，或匯入 CSV 檔。'));
+      box.replaceChildren();
       return;
     }
     var head = el('p', { class: 'batches-title' }, '已匯入的名單（' + state.batches.length + ' 份）');
@@ -2110,11 +2137,13 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
             ok: '移除',
             action: function () {
               if (state.winners.length || busy || !state.batches.some(function (x) { return x.id === b.id; })) return;
+              var before = kindsNow();
               state.batches = state.batches.filter(function (x) { return x.id !== b.id; });
+              var rules = autoRules(before);
               avGc();
               save();
               renderAll();
-              toast('已移除這份' + label);
+              toast('已移除這份' + label + (rules ? '，' + rules : ''));
             }
           });
         });
@@ -2200,7 +2229,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     if (q) list = list.filter(function (p) { return normKey(p.name).indexOf(q) !== -1 || (p.handle && normKey(p.handle).indexOf(q) !== -1); });
     var LIMIT = 300;
     var ul = $('#people');
-    if (!list.length) ul.replaceChildren(el('li', { class: 'person-empty' }, all ? '沒有符合篩選的人。' : '還沒有參加者，先在第 1 步貼上名單。'));
+    if (!list.length) ul.replaceChildren(el('li', { class: 'person-empty' }, all ? '沒有符合篩選的人。' : '還沒有參加者。用抓取工具把名單送過來，就會列在這裡。'));
     else ul.replaceChildren.apply(ul, list.slice(0, LIMIT).map(function (p) { return personRow(p, ev, won.get(p.key)); }));
     var more = $('#people-more');
     more.hidden = list.length <= LIMIT;
@@ -2545,9 +2574,40 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     ['exclude', '#r-exclude', 'text']
   ];
 
-  // how: '貼上', '檔案' or '送出' (sent by the 抓取工具). Returns { ok, msg } for the 抓取工具's answer.
-  // The same list collected further (繼續抓 keeps its time, so it has the same sig) replaces the
-  // shorter copy instead of being added twice.
+  // The 需要留言／按讚／分享 rule follows its lists until the person sets it by hand: on when the first
+  // list of that kind comes in, off when the last one is removed. Says what it changed, or ''.
+  var KIND_RULE = { comment: 'needComment', like: 'needLike', share: 'needShare' };
+  function kindsNow() {
+    var k = {};
+    state.batches.forEach(function (b) { k[b.type] = true; });
+    return k;
+  }
+  function autoRules(before) {
+    if (state.sample || state.winners.length) return '';
+    var now = kindsNow(), on = [], off = [];
+    Object.keys(KIND_RULE).forEach(function (k) {
+      var key = KIND_RULE[k], has = !!now[k];
+      if (!!before[k] === has || state.ui.ruleSet[key] || state.rules[key] === has) return;
+      state.rules[key] = has;
+      (has ? on : off).push('「需要' + TYPE_LABEL[k] + '」');
+    });
+    if (!on.length && !off.length) return '';
+    syncRuleInputs();
+    return [on.length ? '已勾選第 2 步的' + on.join('、') : '', off.length ? '已取消第 2 步的' + off.join('、') : ''].filter(Boolean).join('，');
+  }
+  // After a list comes in: the lists still missing, or the next step once all three are in.
+  function nextHint() {
+    var have = kindsNow();
+    var left = ['comment', 'like', 'share'].filter(function (k) { return !have[k]; });
+    if (!left.length) return '留言、按讚、分享三份名單都到了。確認第 2 步的參加條件，就可以按最下面的「下一步：去抽獎」。';
+    return '還要抓' + left.map(function (k) { return TYPE_LABEL[k]; }).join('或') + '的人，就回到貼文的分頁，在抓取工具上按' +
+      left.map(function (k) { return '「抓' + TYPE_LABEL[k] + '」'; }).join('或') + '；不用的話，確認第 2 步的條件就可以去抽獎了。';
+  }
+
+  // how: '貼上' (the 手動貼上 box), '複製' (the 送不過去的話 box, or pasted on the page), '檔案' or '送出'
+  // (sent by the 抓取工具). Returns { ok, msg } for the 抓取工具's answer; added and rules say the same
+  // in two parts for the banner. The same list collected further (繼續抓 keeps its time, so it has
+  // the same sig) replaces the shorter copy instead of being added twice.
   function addCollected(col, how) {
     if (how !== '送出') showRecv('');
     if (!col.records.length) { toast('這份抓取結果裡沒有名字'); return { ok: false, msg: '這份結果裡沒有名字。' }; }
@@ -2555,6 +2615,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     var same = state.batches.filter(function (b) { return b.sig && b.sig === col.sig; })[0];
     if (same && col.records.length <= same.records.length) { toast('這份抓取結果已經加入過了'); return { ok: true, msg: '這份名單之前已經加入過了。' }; }
     var cleared = !same && clearSampleIfNeeded();
+    var before = kindsNow();
     var msg;
     if (same) {
       msg = '名單更新了，' + same.records.length + ' → ' + col.records.length + unit;
@@ -2567,11 +2628,12 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     if (col.avatars.size) msg += '（含 ' + col.avatars.size + ' 張頭像）';
     avPut(col.avatars);
     state.ui.oldTool = isOldTool(col.tool) ? (col.tool || '?') : null;
+    var rules = autoRules(before);
     if (how === '貼上') { pending = null; $('#paste').value = ''; renderPreview(); }
     save();
     renderAll();
-    toast((cleared ? '已清除範例資料，' : '') + (same ? col.platform + ' 抓取的' + TYPE_LABEL[col.kind] + msg : '加入 ' + col.platform + ' 抓取的' + msg.slice(2)));
-    return { ok: true, msg: msg + '。' };
+    toast((cleared ? '已清除範例資料，' : '') + (same ? col.platform + ' 抓取的' + TYPE_LABEL[col.kind] + msg : '加入 ' + col.platform + ' 抓取的' + msg.slice(2)) + (rules ? '，' + rules : ''));
+    return { ok: true, msg: msg + '。' + (rules ? rules + '。' : ''), added: msg + '。', rules: rules };
   }
 
   // ---------- Receiving from the 抓取工具 ----------
@@ -2597,7 +2659,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     history.replaceState(null, '', location.pathname + location.search);
     showRecv('', '正在接收抓取工具送來的名單…', '');
     recvTimer = setTimeout(function () {
-      showRecv('warn', '沒有收到名單。', '請回到貼文的分頁，按抓取工具上的「複製結果」，再貼到第 1 步「匯入參加者」的方框，按「加入名單」。');
+      showRecv('warn', '沒有收到名單。', '請回到貼文的分頁，按抓取工具上的「複製結果」，再回到這頁，點第 1 步「送不過去的話」的框，按 ' + PASTE_KEY + ' 貼上。');
     }, 20000);
     return true;
   }
@@ -2605,9 +2667,14 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     clearTimeout(recvTimer);
     var col = parseCollected(text);
     if (!col) {
-      showRecv('warn', '收到的名單讀不懂。', '請回到貼文的分頁，按抓取工具上的「複製結果」，再貼到第 1 步。');
+      showRecv('warn', '收到的名單讀不懂。', '請回到貼文的分頁，按抓取工具上的「複製結果」，再貼到第 1 步「送不過去的話」的框。');
       return { ok: false, msg: '抽獎系統讀不懂這份結果，請改用「複製結果」貼上。' };
     }
+    return takeResult(col, '送出');
+  }
+  // A 抓取工具 result, sent or pasted: added unless the draw has started, and the banner says what
+  // happened and what to do next.
+  function takeResult(col, how) {
     var what = col.platform + ' 的' + TYPE_LABEL[col.kind] + '名單';
     if (state.winners.length || busy) {
       var why = busy ? '抽獎系統正在抽獎，等抽完再按一次「送到抽獎系統」。'
@@ -2615,11 +2682,43 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
       showRecv('warn', '沒有加入 ' + what + '。', why);
       return { ok: false, msg: why };
     }
-    var r = addCollected(col, '送出');
+    var r = addCollected(col, how);
     if (!r.ok) { showRecv('warn', '沒有加入 ' + what + '。', r.msg); return r; }
-    showRecv('ok', '已收到 ' + what + '：' + r.msg, '還要抓按讚或分享的人，就回到貼文的分頁，在抓取工具上按「抓按讚」或「抓分享」。');
+    showRecv('ok', (how === '送出' ? '已收到 ' : '已貼上 ') + what + '：' + (r.added || r.msg), (r.rules ? r.rules + '，不需要的話可以取消。' : '') + nextHint());
     if (currentView() !== 'setup') goView('setup');
     return r;
+  }
+  // The 「複製結果」 of the 抓取工具, pasted in the 送不過去的話 box or anywhere on the page. Anything
+  // else pasted in that box goes to the 手動貼上 box below, opened, to be checked and added there.
+  var PASTE_KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '') ? '⌘V' : 'Ctrl+V';
+  function pastedText(e) { return (e.clipboardData && e.clipboardData.getData('text/plain')) || ''; }
+  function wirePaste() {
+    var qp = $('#quick-paste');
+    qp.placeholder = '在工具上按「複製結果」，再點這裡按 ' + PASTE_KEY + ' 貼上';
+    qp.addEventListener('paste', function (e) {
+      var t = pastedText(e);
+      e.preventDefault();
+      qp.value = '';
+      if (!t.trim()) return;
+      var col = parseCollected(t);
+      if (col) { takeResult(col, '複製'); qp.blur(); return; }
+      $('#more-import').open = true;
+      pending = null;
+      $('#paste').value = t;
+      renderPreview();
+      $('#paste').focus();
+      toast('這不是抓取工具的「複製結果」，已放到下面「手動貼上」的方框：選好名單類型再按「加入名單」');
+    });
+    // Typed instead of pasted: nothing to read yet
+    qp.addEventListener('input', function () { var col = parseCollected(qp.value); if (!col) return; qp.value = ''; takeResult(col, '複製'); });
+    document.addEventListener('paste', function (e) {
+      var t = e.target;
+      if (e.defaultPrevented || loading || (t && t.closest && t.closest('input, textarea, select, [contenteditable], dialog'))) return;
+      var col = parseCollected(pastedText(e));
+      if (!col) return;
+      e.preventDefault();
+      takeResult(col, '複製');
+    });
   }
   window.addEventListener('message', function (e) {
     var d = e.data;
@@ -2683,12 +2782,14 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
       var recs = parsePaste($('#paste').value, type);
       if (!recs.length) { toast('沒有讀到名字，請每行貼上一位'); return; }
       var cleared = clearSampleIfNeeded();
+      var before = kindsNow();
       state.batches.push({ id: uid(), type: type, source: '貼上', at: Date.now(), records: recs });
+      var rules = autoRules(before);
       $('#paste').value = '';
       renderPreview();
       save();
       renderAll();
-      toast((cleared ? '已清除範例資料，' : '') + '加入 ' + recs.length + ' 筆' + TYPE_LABEL[type] + '名單');
+      toast((cleared ? '已清除範例資料，' : '') + '加入 ' + recs.length + ' 筆' + TYPE_LABEL[type] + '名單' + (rules ? '，' + rules : ''));
     });
 
     $('#btn-file').addEventListener('click', function () { $('#file').click(); });
@@ -2713,12 +2814,14 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
         var total = groups.comment.length + groups.like.length + groups.share.length;
         if (!total) { toast('檔案裡沒有讀到名字'); return; }
         var cleared = clearSampleIfNeeded();
+        var before = kindsNow();
         ['comment', 'like', 'share'].forEach(function (t) {
           if (groups[t].length) state.batches.push({ id: uid(), type: t, source: '檔案 ' + f.name, at: Date.now(), records: groups[t] });
         });
+        var rules = autoRules(before);
         save();
         renderAll();
-        toast((cleared ? '已清除範例資料，' : '') + '從 ' + f.name + ' 加入 ' + total + ' 筆' + (dec.enc ? '（用' + dec.enc + ' 編碼讀取，名字不對的話請在 Excel 另存成「CSV UTF-8」）' : ''));
+        toast((cleared ? '已清除範例資料，' : '') + '從 ' + f.name + ' 加入 ' + total + ' 筆' + (rules ? '，' + rules : '') + (dec.enc ? '（用' + dec.enc + ' 編碼讀取，名字不對的話請在 Excel 另存成「CSV UTF-8」）' : ''));
       }, function () { toast('讀不到這個檔案'); });
     });
 
@@ -2729,6 +2832,8 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
         if (kind === 'check') state.rules[key] = n.checked;
         else if (kind === 'int') state.rules[key] = clampInt(n.value, 1, 20, state.rules[key]);
         else state.rules[key] = n.value;
+        // Set by hand: autoRules leaves this list rule alone from now on
+        if (key === 'needComment' || key === 'needLike' || key === 'needShare') state.ui.ruleSet[key] = true;
         if (key === 'keywords' && n.value.trim() && !state.rules.needKeyword) { state.rules.needKeyword = true; $('#r-kw').checked = true; }
         if (key === 'tagCount' && !state.rules.needTag) { state.rules.needTag = true; $('#r-tag').checked = true; }
         save();
@@ -2844,24 +2949,29 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
             if (!clearSampleIfNeeded()) return;
             save();
             renderAll();
-            toast('範例已清除，從第 1 步貼上你的名單開始');
+            toast('範例已清除。到貼文按書籤列的「抓取抽獎名單」，名單就會送過來');
           }
         });
         return;
       }
-      var n = state.batches.length;
+      var n = state.batches.length, kinds = kindsNow();
+      // The list rules that were ticked automatically go away with their lists (see autoRules)
+      var off = Object.keys(KIND_RULE).filter(function (k) { var key = KIND_RULE[k]; return kinds[k] && state.rules[key] && !state.ui.ruleSet[key]; });
       ask({
         title: '清空全部名單？',
-        text: '已匯入的 ' + n + ' 份名單（' + evaluate().people.length + ' 位參加者）會全部移除，參加條件和獎品會留著。',
+        text: '已匯入的 ' + n + ' 份名單（' + evaluate().people.length + ' 位參加者）會全部移除' +
+          (off.length ? '，第 2 步的' + off.map(function (k) { return '「需要' + TYPE_LABEL[k] + '」'; }).join('、') + '也會跟著取消' : '') + '。獎品和其他條件會留著。',
         ok: '清空名單',
         action: function () {
           if (!state.batches.length || state.winners.length || busy) return;
           var count = state.batches.length;
+          var before = kindsNow();
           state.batches = [];
+          var rules = autoRules(before);
           avGc();
           save();
           renderAll();
-          toast('已移除全部 ' + count + ' 份名單，條件和獎品都還在');
+          toast('已移除全部 ' + count + ' 份名單' + (rules ? '，' + rules : '，條件和獎品都還在'));
         }
       });
     });
@@ -2920,8 +3030,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
         save();
         renderAll();
         goView('setup');
-        toast('範例已清除，從第 1 步貼上你的名單開始');
-        $('#paste').focus();
+        toast('範例已清除。到貼文按書籤列的「抓取抽獎名單」，名單就會送過來');
       }
     });
     $('#btn-try').addEventListener('click', function (e) {
@@ -2941,6 +3050,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
   syncRuleInputs();
   $('#opt-anim').checked = !!state.ui.anim;
   wire();
+  wirePaste();
   syncImportUI();
   renderPrizeEditor(true);
   renderAll();

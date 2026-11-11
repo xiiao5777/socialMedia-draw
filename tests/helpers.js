@@ -73,6 +73,8 @@ function pasteInto(page, sel, text) {
     const dt = new DataTransfer();
     dt.setData('text/plain', text);
     const ta = document.querySelector(sel);
+    const fold = ta.closest('details');
+    if (fold) fold.open = true;
     ta.focus();
     const ev = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
     ta.dispatchEvent(ev);

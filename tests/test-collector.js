@@ -120,7 +120,7 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   check(await avatarMatches(r.page, av['fb:peishan.li'], 'https://scontent.xx.fbcdn.net/v/t39.30808-1/peishan_li_n.jpg'), 'FB: emoji in a comment is not used as the avatar');
   check(await avatarMatches(r.page, av['fb:100045'], 'https://scontent.xx.fbcdn.net/v/t39.30808-1/profile_php_id_100045_n.jpg'), 'FB: profile.php person has the right avatar');
   check(!r.imgLog.some(l => l.cors && /photo_777|emoji\.php/.test(l.url)), 'FB: the collector never fetched the photo or the emoji');
-  check(/頭像 20 \/ 21 張/.test(r.panelText), 'FB: panel reports avatars 20 / 21');
+  check(/頭像 20 \/ 21 張，沒抓到的會用名字的第一個字代替/.test(r.panelText) && !/複製診斷資訊/.test(r.panelText), 'FB: a grey line reports avatars 20 / 21, no 複製診斷資訊 for one missing');
   check(await countLine(r.page) === '22/ 22 則留言' && !await hasGoOn(r.page), 'FB: reads 「22 則留言」 on the post and shows 22 / 22, nothing left to 繼續抓 (' + await countLine(r.page) + ')');
   const mainBtn = await r.page.evaluate(() => { const b = document.getElementById('giveaway-collector-host').shadowRoot.querySelector('button[style*="rgb(198, 43, 43)"]'); return b && b.textContent; });
   check(mainBtn === '送到抽獎系統', 'FB: 送到抽獎系統 is the main (red) button (' + mainBtn + ')');
@@ -133,7 +133,7 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   const clip = await r.page.evaluate(() => navigator.clipboard.readText());
   check(clip === r.raw, 'FB: copy button puts the JSON on the clipboard');
   let pt = await panel(r.page);
-  check(pt.includes('✓ 已複製成功！請到抽獎系統第 1 步貼上') && await btn(r.page, '✓ 已複製').count() === 1, 'FB: copying shows the green ✓ 已複製 confirmation');
+  check(pt.includes('✓ 已複製成功！到抽獎系統第 1 步，點「送不過去的話」的框，按 Ctrl+V 貼上') && await btn(r.page, '✓ 已複製').count() === 1, 'FB: copying shows the green ✓ 已複製 confirmation');
   const green = await btn(r.page, '✓ 已複製').evaluate(b => getComputedStyle(b).backgroundColor);
   check(green === 'rgb(27, 110, 69)', 'FB: copy button turns green (' + green + ')');
   // 打開抽獎系統: opens the draw page, and the copied result pastes straight in
@@ -145,8 +145,7 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   await drawPage.waitForLoadState();
   await drawPage.waitForTimeout(300);
   check(drawPage.url() === SITE + 'draw.html' && await drawPage.title() === '開始抽獎｜抽獎系統', 'FB: the draw page opens (' + drawPage.url() + ')');
-  check(await pasteInto(drawPage, '#paste', clip), 'FB: the copied result pastes into the draw page');
-  await drawPage.click('#btn-add');
+  check(await pasteInto(drawPage, '#quick-paste', clip), 'FB: the copied result pastes into 送不過去的話 on the draw page');
   await drawPage.waitForTimeout(200);
   check(await drawPage.$eval('#s-people', n => n.textContent) === '21' && (await drawPage.$eval('#toast', n => n.textContent)).includes('含 20 張頭像'), 'FB: 21 people and 20 avatars land in the draw page');
   check(await drawPage.isHidden('#tool-banner'), 'FB: no update banner for the newest tool');
@@ -232,7 +231,7 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   // Threads likes dialog: the picture server refuses other pages (no CORS)
   r = await runOn(browser, 'https://www.threads.com/@brandtw/post/DAbc123/likes');
   check(r.result && r.result.kind === 'like' && r.result.items.length === 12, 'Threads likes: 12 likers (got ' + (r.result && r.result.items.length) + ')');
-  check(r.result && !r.result.avatars && /頭像 0 \/ 12 張/.test(r.panelText) && /有些頭像抓不到/.test(r.panelText), 'Threads likes: avatars blocked, panel explains the letter fallback');
+  check(r.result && !r.result.avatars && /頭像 0 \/ 12 張，沒抓到的會用名字的第一個字代替，不影響抽獎。複製診斷資訊/.test(r.panelText) && !/有些頭像抓不到/.test(r.panelText), 'Threads likes: avatars blocked, one grey line explains the letter fallback and offers 複製診斷資訊');
   check(await countLine(r.page) === '12/ 12 位按讚的人', 'Threads likes: the post\'s like number behind the list, 12 / 12 (' + await countLine(r.page) + ')');
   await r.ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'https://www.threads.com' });
   await btn(r.page, '複製診斷資訊').click();
@@ -318,7 +317,7 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   await r.page.locator('#giveaway-collector-host').screenshot({ path: path.join(OUT, 'shot-send-locked.png') });
   await copyNow(r.page);
   ft = await panel(r.page);
-  check(/三份名單都抓好了/.test(ft) && /第 2 步勾選參加條件/.test(ft), 'Flow FB: all three lists done, the panel points to 參加條件');
+  check(/三份名單都抓好了/.test(ft) && /第 2 步確認參加條件（會跟著名單自動勾好）/.test(ft), 'Flow FB: all three lists done, the panel points to 參加條件');
   await shotPanel('shot-flow-5-done.png');
   await btn(r.page, /^留言$/).click();
   await r.page.waitForTimeout(400);
