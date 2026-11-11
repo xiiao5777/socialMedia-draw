@@ -175,7 +175,7 @@ const sample = (name) => {
   // CSV as a real download
   const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#btn-csv')]);
   const csv = fs.readFileSync(await dl.path(), 'utf8').replace(/^﻿/, '').split('\r\n');
-  check(/^抽獎結果-\d{8}-\d{4}\.csv$/.test(dl.suggestedFilename()) && csv[0] === '獎項,名次,抽獎編號,名字,帳號,個人檔案連結,留言,留言連結,狀態,抽出時間,當時抽獎池人數,作廢時間' && /,https:\/\/[^,]+,.*,https:\/\/[^,]+,有效,/.test(csv[1] || ''), 'draw: CSV downloads with link columns (' + dl.suggestedFilename() + ')');
+  check(/^抽獎結果-\d{8}-\d{4}\.csv$/.test(dl.suggestedFilename()) && csv[0] === '獎項,名次,抽獎編號,名字,帳號,個人檔案連結,留言,留言連結,留言時間,狀態,抽出時間,當時抽獎池人數,作廢時間' && /,https:\/\/[^,]+,.*,https:\/\/[^,]+,2026\/11\/\d\d \d\d:00:00,有效,/.test(csv[1] || ''), 'draw: CSV downloads with link columns and the reply\'s time (' + dl.suggestedFilename() + ') ' + csv[1]);
 
   // ---------- Homepage remembers the giveaway ----------
   await page.waitForTimeout(300);

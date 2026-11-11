@@ -1,7 +1,8 @@
 // Draw page with real-world lists: people who share a name, CSV files saved by Excel in Big5 / GBK,
 // a giveaway too big for localStorage (kept in IndexedDB instead, or a warning when it can't be kept),
 // the page opened by 送到抽獎系統 when no list arrives, a giveaway that lasts while a tab has it open,
-// and one giveaway per platform.
+// one giveaway per platform, and 留言截止時間.
+const fs = require('fs');
 const { SITE, launch, serveSite, check, done, pasteInto, version } = require('./helpers');
 
 const url = SITE + 'draw.html';
@@ -459,6 +460,95 @@ function bigList(n) {
   check(fb.url() === url + '?g=facebook#setup' && (await txt(fb, '#s-drawn')).startsWith('1 /') && await ticksOf(fb) === '100' && (await txt(fb, '#toast')).startsWith('現在顯示 Facebook 的抽獎'),
     'the switcher shows the Facebook giveaway again, its winner and rules as they were');
   await ctx6.close();
+
+  // ---------- 留言截止時間: only comments left before it count ----------
+  // The time typed is the browser's own (Malaysia here, UTC+8): 12:00 there is 04:00 UTC.
+  const ctx8 = await browser.newContext({ viewport: { width: 1280, height: 900 }, timezoneId: 'Asia/Kuala_Lumpur' });
+  await serveSite(ctx8);
+  const dl = await ctx8.newPage();
+  watch(dl, 'deadline');
+  await dl.goto(url + '#setup');
+  await dl.waitForTimeout(300);
+  await dl.click('#btn-clear-sample');
+  // A person's row: what it says about them | why they do not qualify
+  const row = (p, name) => p.locator('#people .person', { has: p.locator('.name', { hasText: new RegExp('^' + name + '(@\\w+)?$') }) });
+  const rowText = (p, name) => row(p, name).evaluate(n => ((n.querySelector('.meta') || {}).textContent || '') + '|' + ((n.querySelector('.reasons') || {}).textContent || ''));
+  // X replies have their exact time; Dan's list came from an older tool, without times
+  await pasteInto(dl, '#paste', xList('comment', [
+    { name: 'Ann', handle: '@ann', text: '我要抽 @a1 @a2', time: '2026-11-10T03:00:00.000Z' },
+    { name: 'Ben', handle: '@ben', text: '我要抽 @b1 @b2', time: '2026-11-10T05:00:00.000Z' },
+    { name: 'Cat', handle: '@cat', text: 'hi', time: '2026-11-10T02:00:00.000Z' },
+    { name: 'Cat', handle: '@cat', text: '我要抽 @c1 @c2', time: '2026-11-10T06:00:00.000Z' },
+    { name: 'Dan', handle: '@dan', text: '我要抽 @d1 @d2' }
+  ]));
+  await dl.click('#btn-add');
+  await dl.waitForTimeout(200);
+  check(await txt(dl, '#s-people') === '4' && await txt(dl, '#s-eligible') === '4' && !(await dl.isChecked('#r-time')) && await dl.isHidden('#r-time-note'), 'replies with times: no deadline yet, everyone who replied qualifies');
+  await dl.fill('#r-time-at', '2026-11-10T12:00');
+  await dl.waitForTimeout(200);
+  const note = await txt(dl, '#r-time-note');
+  check(await dl.isChecked('#r-time') && await txt(dl, '#s-eligible') === '3' && note.startsWith('截止時間是 2026/11/10 12:00，之後的 2 則留言不算。有 1 則留言沒有時間') && await dl.$eval('#r-time-note', n => n.classList.contains('warn')),
+    'typing a deadline ticks the rule; the note counts what it left out and what has no time: ' + note);
+  check((await rowText(dl, 'Ben')).endsWith('|截止時間後才留言') && (await rowText(dl, 'Cat')).includes('截止後的 1 則不算') && !(await rowText(dl, 'Cat')).includes('標記') && (await rowText(dl, 'Ann')).endsWith('標記 2 位|') && (await rowText(dl, 'Dan')).endsWith('|'),
+    'Ben replied only after it, one of Cat\'s two replies was late, Dan has no time and counts ' + JSON.stringify([await rowText(dl, 'Ben'), await rowText(dl, 'Cat')]));
+  // The keyword and tag rules count the replies before the deadline only
+  await dl.fill('#r-kw-text', '我要抽');
+  await dl.check('#r-tag');
+  await dl.waitForTimeout(200);
+  check(await txt(dl, '#s-eligible') === '2' && (await rowText(dl, 'Cat')).endsWith('|只標記 0 位（需要 1 位）、留言沒有關鍵字') && (await rowText(dl, 'Ben')).endsWith('|截止時間後才留言'),
+    'Cat\'s keyword and tags came after the deadline, so they do not count: ' + await rowText(dl, 'Cat'));
+  const chips = await dl.$$eval('#rule-sum .rs-chip', cs => cs.map(c => c.textContent));
+  check(chips.includes('只算 11/10 12:00 前的留言'), 'the draw page lists the deadline with the rules ' + JSON.stringify(chips));
+  await dl.uncheck('#r-time');
+  await dl.waitForTimeout(200);
+  check(await txt(dl, '#s-eligible') === '4' && await dl.isHidden('#r-time-note'), 'unticking the deadline counts every reply again');
+  await dl.check('#r-time');
+  await dl.waitForTimeout(200);
+  check(await txt(dl, '#s-eligible') === '2', 'ticking it again uses the time still typed');
+
+  // Facebook says only 「1天」: a comment whose span takes in the deadline counts, and is marked
+  await pasteInto(dl, '#paste', result('comment', [
+    { name: 'Amy', handle: 'fb:91', text: '我要抽', timeFrom: '2026-11-09T20:00:00.000Z', timeTo: '2026-11-10T10:00:00.000Z', timeText: '1天', link: 'https://www.facebook.com/p/1?comment_id=11' },
+    { name: 'Bob', handle: 'fb:92', text: '我要抽', timeFrom: '2026-11-09T00:00:00.000Z', timeTo: '2026-11-09T12:00:00.000Z', timeText: '2天' },
+    { name: 'Cid', handle: 'fb:93', text: '我要抽', timeFrom: '2026-11-10T06:00:00.000Z', timeTo: '2026-11-10T08:00:00.000Z', timeText: '3小時' },
+    { name: 'Dee', handle: 'fb:94', text: '我要抽' }
+  ]));
+  await dl.click('#btn-add');
+  await dl.waitForTimeout(300);
+  check(dl.url() === url + '?g=facebook#setup' && await txt(dl, '#s-people') === '4' && !(await dl.isChecked('#r-time')) && await dl.$eval('#r-time-at', n => n.value) === '',
+    'the Facebook list starts its own giveaway, with no deadline yet (' + dl.url() + ')');
+  await dl.check('#r-time');
+  await dl.waitForTimeout(200);
+  check(await dl.evaluate(() => document.activeElement && document.activeElement.id) === 'r-time-at' && await txt(dl, '#r-time-note') === '填好截止時間才會生效。' && await txt(dl, '#s-eligible') === '4',
+    'ticking the rule with no time typed asks for the time and leaves out nobody');
+  await dl.fill('#r-time-at', '2026-11-10T12:00');
+  await dl.waitForTimeout(200);
+  const fbNote = await txt(dl, '#r-time-note');
+  const unsure = await row(dl, 'Amy').evaluate(n => {
+    const u = n.querySelector('.meta .unsure'), a = u && u.querySelector('a');
+    return u ? u.textContent + ' ' + (a ? a.getAttribute('href') : '') : '';
+  });
+  check(await txt(dl, '#s-eligible') === '3' && (await rowText(dl, 'Cid')).endsWith('|截止時間後才留言') && (await rowText(dl, 'Bob')).endsWith('|'),
+    'Bob (「2天」, before it) counts, Cid (「3小時」, after it) does not ' + await rowText(dl, 'Cid'));
+  check(unsure === '留言時間不確定（1天），看留言 ↗ https://www.facebook.com/p/1?comment_id=11' && fbNote.includes('之後的 1 則留言不算。有 1 則 Facebook 留言只顯示「1天」這種時間'),
+    'Amy\'s 「1天」 may be before or after it: she counts, marked, with a link to her comment: ' + unsure + ' / ' + fbNote);
+  // A winner's comment time goes in the CSV: Facebook's span, in the browser's time
+  await dl.fill('#r-exclude', 'Bob\nDee');
+  await dl.waitForTimeout(200);
+  check(await txt(dl, '#s-eligible') === '1', 'with Bob and Dee left out, only Amy is in the draw');
+  await dl.click('.view-tab[data-view="draw"]');
+  await dl.click('label.switch');
+  await dl.click('#btn-draw');
+  await dl.waitForFunction(() => !document.getElementById('btn-csv').disabled, null, { timeout: 8000 });
+  await dl.waitForTimeout(300);
+  const [csvDl] = await Promise.all([dl.waitForEvent('download'), dl.click('#btn-csv')]);
+  const rows8 = fs.readFileSync(await csvDl.path(), 'utf8').replace(/^\uFEFF/, '').split('\r\n');
+  check(rows8[0].includes(',留言連結,留言時間,狀態,') && rows8[1].includes(',Amy,') && rows8[1].includes(',https://www.facebook.com/p/1?comment_id=11,約 2026/11/10 04:00 ~ 2026/11/10 18:00,有效,'),
+    'the CSV gives the winner\'s comment time as the span Facebook allows: ' + rows8[1]);
+  await dl.click('.view-tab[data-view="setup"]');
+  await dl.waitForTimeout(150);
+  check(await dl.isDisabled('#r-time-at') && await dl.isDisabled('#r-time'), 'the deadline locks with the other rules once the draw starts');
+  await ctx8.close();
 
   check(!errors.length, 'no page errors ' + JSON.stringify(errors));
   await browser.close();

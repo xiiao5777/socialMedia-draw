@@ -106,6 +106,15 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   const long = fb && fb.items.find(i => i.name === '黃志豪');
   check(long && /後半段/.test(long.text), 'FB: "查看更多" expanded long comment (' + (long && long.text) + ')');
   check(fb && !fb.items.some(i => i.name === '我自己'), 'FB: page header links ignored');
+  // Times: Facebook only says how long ago, so each comment gets a span, counted back from when it was read
+  const ref = fb ? Date.parse(fb.at) : 0;
+  const span = (i) => i && i.timeFrom && i.timeTo ? [(ref - Date.parse(i.timeTo)) / 3600000, (ref - Date.parse(i.timeFrom)) / 3600000] : null;
+  const hours = (a, lo, hi) => a && Math.abs(a[0] - lo) < 0.2 && Math.abs(a[1] - hi) < 0.2;
+  const xmSpan = span(xm), amySpan = span(fb && fb.items.find(i => i.name === 'Amy Lim'));
+  check(xm && xm.timeText === '3小時' && !xm.time && hours(xmSpan, 2.5, 4) && fb.items.every(i => i.timeText && i.timeFrom < i.timeTo),
+    'FB: 「3小時」 is a span of 2.5 to 4 hours ago, and every comment has one ' + JSON.stringify(xmSpan));
+  check(hours(amySpan, 0.85 * 24, 48) && hours(span(fb.items.find(i => i.name === '黃志豪')), 0.85 * 168, 336) && hours(span(fb.items.find(i => i.name === 'Siti Aisyah')), 1.5, 3),
+    'FB: 「1天」, 「1週」 and 「2h」 read as spans too ' + JSON.stringify(amySpan));
   // links
   check(xm && xm.url === 'https://www.facebook.com/xiaoming.chen' && xm.link === 'https://www.facebook.com/brandpage/posts/pfbid0abc?comment_id=C1', 'FB: profile link and comment link (' + (xm && xm.url + ' ' + xm.link) + ')');
   const lyReply = ly && ly.find(i => /reply_comment_id/.test(i.link || ''));
@@ -196,6 +205,7 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   const u0 = x && x.items.find(i => i.handle === '@user_0');
   check(u0 && u0.name === 'User 0' && u0.tags && u0.tags.join() === '@friend_0,@friend_1', 'X: name, handle and mention tags (' + JSON.stringify(u0) + ')');
   check(u0 && u0.url === 'https://x.com/user_0' && u0.link === 'https://x.com/user_0/status/1000', 'X: profile link and reply link');
+  check(u0 && u0.time === '2026-11-10T11:00:00.000Z' && !u0.timeFrom && x.items.find(i => i.handle === '@user_3').time === '2026-11-10T14:00:00.000Z', 'X: each reply has its exact time (' + (u0 && u0.time) + ')');
   check(/略過貼文作者/.test(r.panelText), 'X: panel reports skipped owner replies');
   check(await countLine(r.page) === '33/ 34 則留言' && !await hasGoOn(r.page), 'X: shows the post\'s "34 replies" as it is, 33 / 34 with the author\'s own reply skipped (' + await countLine(r.page) + ')');
   const xav = (x && x.avatars) || {};
@@ -221,6 +231,7 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   const t0i = th && th.items.find(i => i.handle === '@th.user0');
   check(t0i && t0i.text === '我要抽 @pal_0 @pal_2' && t0i.tags && t0i.tags.length === 2, 'Threads: text and tags (' + JSON.stringify(t0i) + ')');
   check(t0i && t0i.url === 'https://www.threads.com/@th.user0' && t0i.link === 'https://www.threads.com/@th.user0/post/R0', 'Threads: profile link and reply link');
+  check(t0i && t0i.time === '2026-11-10T08:30:00.000Z' && th.items.every(i => i.time && !i.timeFrom), 'Threads: each reply has its exact time (' + (t0i && t0i.time) + ')');
   check(th && !th.items.some(i => i.handle === '@brandtw'), 'Threads: main post and owner reply skipped');
   check(await countLine(r.page) === '16/ 17 則留言' && !await hasGoOn(r.page), 'Threads: reads the number next to the reply icon, 16 / 17 with the author\'s own reply skipped (' + await countLine(r.page) + ')');
   const tav = (th && th.avatars) || {};

@@ -5,7 +5,7 @@
 (function () {
   'use strict';
   // Keep in step with COLLECTOR_VERSION in draw.html (build.js checks).
-  var VERSION = '1.7';
+  var VERSION = '1.8';
   // The 抽獎系統 page, filled in by build.js from the site address.
   var DRAW_URL = '__DRAW_URL__';
   var DRAW_ORIGIN = (DRAW_URL.match(/^https:\/\/[^/]+/) || [''])[0];
@@ -390,14 +390,69 @@
     run: 0, wait: null, results: {}, summary: '', notes: [], stale: null,
     counts: {}, countsFor: '', expect: null, stop: '', at: '', lastRes: null, noSend: false
   };
+  // ---------- When a comment was left ----------
+  // For the 抽獎系統's 截止時間. X and Threads give the exact time (<time datetime>; on X the post id
+  // holds it too). Facebook shows only how long ago ("3小時", "1天", "2週"): that gives a span,
+  // counted back from now. A label may be rounded either way (FB shows "1天" from 24 hours), so the
+  // span is half a unit wider on the recent side.
+  var UNIT_MS = { s: 1000, m: 60000, h: 3600000, d: 86400000, w: 604800000, y: 31536000000 };
+  var UNIT_OF = [
+    [/^(秒|s|secs?|seconds?)$/i, 's'], [/^(分鐘|分钟|分|m|mins?|minutes?)$/i, 'm'], [/^(小時|小时|時|h|hrs?|hours?)$/i, 'h'],
+    [/^(天|日|d|days?)$/i, 'd'], [/^(週|周|星期|w|wks?|weeks?)$/i, 'w'], [/^(年|y|yrs?|years?)$/i, 'y']
+  ];
+  var MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+  // [from, to] in ms for a time label as the site shows it, or null
+  function labelSpan(label, now) {
+    var s = String(label || '').replace(/\s+/g, ' ').trim();
+    if (!s || s.length > 40) return null;
+    if (/^(剛剛|刚刚|just now|now)$/i.test(s)) return [now - 60000, now];
+    var m = s.match(/^(\d+) ?([^\d\s]+)(?: ?(前|ago))?$/i);
+    if (m) {
+      var unit = null;
+      UNIT_OF.forEach(function (u) { if (!unit && u[0].test(m[2])) unit = u[1]; });
+      if (!unit) return null;
+      // "1天" comes after "23小時", "1週" after "6天": one unit is at least 0.85 of it
+      var n = parseInt(m[1], 10), ms = UNIT_MS[unit];
+      return [now - (n + 1) * ms, now - (n >= 2 ? n - 0.5 : n * 0.85) * ms];
+    }
+    // A date: 2025年11月5日, 11月5日, 2025-11-05, Nov 5, 5 November 2025 (the whole day, local time)
+    var y = 0, mo = 0, d = 0;
+    if ((m = s.match(/^(?:(\d{4})\s*年\s*)?(\d{1,2})\s*月\s*(\d{1,2})\s*日/))) { y = +m[1] || 0; mo = +m[2]; d = +m[3]; }
+    else if ((m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$/))) { y = +m[1]; mo = +m[2]; d = +m[3]; }
+    else if ((m = s.match(/^([A-Za-z]{3})[a-z]*\.? (\d{1,2})(?:, (\d{4}))?$/)) && MONTHS.indexOf(m[1].toLowerCase()) !== -1) { y = +m[3] || 0; mo = MONTHS.indexOf(m[1].toLowerCase()) + 1; d = +m[2]; }
+    else if ((m = s.match(/^(\d{1,2}) ([A-Za-z]{3})[a-z]*\.?(?: (\d{4}))?$/)) && MONTHS.indexOf(m[2].toLowerCase()) !== -1) { y = +m[3] || 0; mo = MONTHS.indexOf(m[2].toLowerCase()) + 1; d = +m[1]; }
+    else return null;
+    if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+    if (!y) { y = new Date(now).getFullYear(); if (new Date(y, mo - 1, d).getTime() > now) y--; }
+    var start = new Date(y, mo - 1, d).getTime();
+    return isFinite(start) ? [start, start + UNIT_MS.d] : null;
+  }
+  // Adds when a comment was left to its item. el: its <time>, or the link that shows the time.
+  function withTime(item, el, xId) {
+    var dt = el && el.getAttribute ? el.getAttribute('datetime') : null;
+    var ms = dt ? Date.parse(dt) : NaN;
+    // An X post id holds its time (ms since 2010-11-04, shifted by 22 bits)
+    if (!isFinite(ms) && xId && /^\d{15,}$/.test(xId)) ms = Math.floor(Number(xId) / 4194304) + 1288834974657;
+    if (isFinite(ms)) { item.time = new Date(ms).toISOString(); return item; }
+    var label = el ? txt(el) : '';
+    var span = labelSpan(label, Date.now());
+    if (span) {
+      item.timeFrom = new Date(span[0]).toISOString();
+      item.timeTo = new Date(span[1]).toISOString();
+      item.timeText = label.slice(0, 30);
+    }
+    return item;
+  }
+  var TIME_KEYS = ['time', 'timeFrom', 'timeTo', 'timeText'];
   function put(key, item, el) {
     var cur = S.store.get(key);
     if (cur) {
-      // Keep the fullest version: text can grow after "See more" is expanded. Links that only
-      // showed up later are kept either way.
+      // Keep the fullest version: text can grow after "See more" is expanded. Links and times that
+      // only showed up later are kept either way.
       var keep = (item.text || '').length > (cur.text || '').length ? item : cur;
       var other = keep === item ? cur : item;
       ['handle', 'url', 'link'].forEach(function (k) { if (!keep[k] && other[k]) keep[k] = other[k]; });
+      if (!keep.time && !keep.timeFrom && (other.time || other.timeFrom)) TIME_KEYS.forEach(function (k) { if (other[k]) keep[k] = other[k]; });
       item = keep;
     }
     S.store.set(key, item);
@@ -438,7 +493,12 @@
       var link = tsLink ? fbCommentLink(tsLink.getAttribute('href'))
         : (idLink && looksLikePostPage() ? fbCommentLink(idLink.getAttribute('href'), location.href) : '');
       var name = txt(author);
-      put(cid ? 'c:' + cid : 'h:' + (handle || name) + '|' + text, { name: name, handle: handle, text: text, tags: uniq(tags), url: profileUrl(handle), link: link }, art);
+      var item = { name: name, handle: handle, text: text, tags: uniq(tags), url: profileUrl(handle), link: link };
+      var tEl = $$(art, 'time[datetime]').filter(function (t) { return ownedBy(t, art); })[0];
+      var ab = $$(art, 'abbr[data-utime]').filter(function (t) { return ownedBy(t, art); })[0];
+      if (!tEl && ab && /^\d{9,11}$/.test(ab.getAttribute('data-utime'))) item.time = new Date(Number(ab.getAttribute('data-utime')) * 1000).toISOString();
+      else withTime(item, tEl || tsLink, null);
+      put(cid ? 'c:' + cid : 'h:' + (handle || name) + '|' + text, item, art);
       grabAvatar(personKey(handle, name), function () { return avatarFor(art, handle) || avatarNear(author, handle); });
     });
   }
@@ -467,7 +527,7 @@
       if (isOwner(au.handle)) { S.skippedOwner.add(id); return; }
       var tt = art.querySelector('[data-testid="tweetText"]');
       var tags = tt ? profileLinks(tt).map(hrefHandle).filter(function (h) { return h && h !== au.handle; }) : [];
-      put('x:' + id, { name: au.name, handle: au.handle, text: txt(tt), tags: uniq(tags), url: profileUrl(au.handle), link: 'https://x.com/' + au.handle.slice(1) + '/status/' + id }, art);
+      put('x:' + id, withTime({ name: au.name, handle: au.handle, text: txt(tt), tags: uniq(tags), url: profileUrl(au.handle), link: 'https://x.com/' + au.handle.slice(1) + '/status/' + id }, art.querySelector('a[href*="/status/"] time'), id), art);
       grabAvatar(personKey(au.handle), function () { return xAvatar(art, au.handle); });
     });
   }
@@ -548,7 +608,7 @@
         profileLinks(b).forEach(function (a) { var h = hrefHandle(a); if (h && h !== handle) tags.push(h); });
       });
       var name = txt(author).replace(/^@/, '');
-      put(id ? 'g:' + id : 'h:' + handle + '|' + text, { name: name, handle: handle, text: text, tags: uniq(tags), url: profileUrl(handle), link: timeLinkUrl(c) }, c);
+      put(id ? 'g:' + id : 'h:' + handle + '|' + text, withTime({ name: name, handle: handle, text: text, tags: uniq(tags), url: profileUrl(handle), link: timeLinkUrl(c) }, c.querySelector('time'), null), c);
       grabAvatar(personKey(handle, name), function () { return avatarFor(c, handle) || avatarByAlt(c, handle) || avatarNear(author, handle); });
     });
   }
@@ -689,6 +749,8 @@
       if (v.tags && v.tags.length) o.tags = v.tags;
       if (v.url) o.url = v.url;
       if (v.link) o.link = v.link;
+      if (v.time) o.time = v.time;
+      else if (v.timeFrom) { o.timeFrom = v.timeFrom; o.timeTo = v.timeTo; if (v.timeText) o.timeText = v.timeText; }
       out.push(o);
     });
     return out;
