@@ -91,8 +91,11 @@ const url = SITE + 'draw.html';
 
   // Void the first winner (two-step)
   const voidBtn = page.locator('#winners .wrow button').first();
+  const red = await voidBtn.evaluate(n => [getComputedStyle(n).color, getComputedStyle(n).borderTopColor].join());
+  check(red === 'rgb(174, 35, 35),rgb(174, 35, 35)', '作廢 is red ' + red);
   await voidBtn.click();
-  check((await voidBtn.textContent()).includes('確定作廢'), 'void asks for confirmation');
+  const armed = await voidBtn.evaluate(n => [getComputedStyle(n).backgroundColor, getComputedStyle(n).color].join());
+  check((await voidBtn.textContent()).includes('確定作廢') && armed === 'rgb(198, 43, 43),rgb(255, 255, 255)', 'void asks for confirmation on solid red ' + armed);
   await voidBtn.click();
   await page.waitForTimeout(100);
   check(await page.locator('#winners .wrow.void').count() === 1, 'winner voided');

@@ -358,6 +358,10 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
 .btn-ghost { background: transparent; }
 .btn.danger { color: var(--accent-text); }
 .btn[data-armed="1"] { background: var(--accent-soft); border-color: var(--accent-text); color: var(--accent-text); }
+/* 作廢 on a winner: red, and solid red while it asks 確定作廢？ */
+.btn-void { color: var(--accent-text); border-color: var(--accent-text); }
+.btn-void:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent-text); }
+.btn-void[data-armed="1"], .btn-void[data-armed="1"]:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .row-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 
 /* Segmented control */
@@ -2105,7 +2109,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     var action;
     if (w.void) action = el('span', { class: 'pill pill-void' }, '已作廢');
     else {
-      action = el('button', { type: 'button', class: 'btn btn-ghost', disabled: busy }, '作廢');
+      action = el('button', { type: 'button', class: 'btn btn-ghost btn-void', disabled: busy }, '作廢');
       twoStep(action, '確定作廢？', function () { voidWinner(w.id); });
     }
     var url = safeUrl(w.url), link = safeUrl(w.link);
