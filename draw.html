@@ -357,11 +357,14 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
 .btn-lg { min-height: 50px; padding: 10px 22px; font-size: 16px; font-weight: 700; }
 .btn-ghost { background: transparent; }
 .btn.danger { color: var(--accent-text); }
-.btn[data-armed="1"] { background: var(--accent-soft); border-color: var(--accent-text); color: var(--accent-text); }
-/* 作廢 on a winner: red, and solid red while it asks 確定作廢？ */
+.btn svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+/* 作廢 on a winner: red */
 .btn-void { color: var(--accent-text); border-color: var(--accent-text); }
 .btn-void:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent-text); }
-.btn-void[data-armed="1"], .btn-void[data-armed="1"]:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+/* 清空名單 at the top of step 1: easy to find, red text, asks first */
+.sec-head .sec-act { margin-left: auto; flex: none; }
+.btn-clear { color: var(--accent-text); }
+.btn-clear:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent-text); }
 .row-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 
 /* Segmented control */
@@ -418,8 +421,6 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
 
 .batches { display: flex; flex-direction: column; gap: 6px; }
 .batches-title { font-size: 13px; color: var(--muted); letter-spacing: .06em; }
-.batches-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.batches-head .btn { min-height: 30px; padding: 4px 10px; font-size: 13px; }
 .batch {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -833,6 +834,30 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
   font-size: 14px;
   box-shadow: var(--shadow);
 }
+/* Confirm dialog: asks before anything is removed (清空名單, 移除, 作廢, 重新開始抽獎, 清除全部資料).
+   Esc, 取消 or a click on the dimmed page around it cancels. */
+.confirm {
+  width: min(440px, calc(100% - 32px));
+  max-width: none;
+  max-height: calc(100% - 32px);
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 24px 64px rgba(8, 12, 20, .3);
+}
+.confirm::backdrop { background: rgba(10, 14, 22, .5); }
+.confirm[open] { animation: confirm-in .16s ease-out; }
+@keyframes confirm-in { from { opacity: 0; transform: translateY(8px) scale(.98); } }
+.confirm-box { display: flex; flex-direction: column; gap: 8px; padding: 22px 22px 18px; }
+.confirm-title { font-size: 18px; font-weight: 700; line-height: 1.45; overflow-wrap: anywhere; }
+.confirm-text { color: var(--muted); font-size: 14.5px; overflow-wrap: anywhere; }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 12px; }
+.confirm-actions .btn { min-width: 100px; min-height: 42px; }
+@media (max-width: 480px) {
+  .confirm-actions .btn { flex: 1 1 0; min-width: 0; }
+}
 .sr-only {
   position: absolute !important;
   width: 1px;
@@ -906,6 +931,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
               <h2 id="h-import">匯入參加者</h2>
               <p class="sub">分別貼上留言、按讚、分享的名單，同一個名字會自動合併成一位參加者。</p>
             </div>
+            <button class="btn btn-clear sec-act" type="button" id="btn-clear-lists" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M5.5 7l1 12.2A2 2 0 0 0 8.5 21h7a2 2 0 0 0 2-1.8L18.5 7M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7"/></svg>清空名單</button>
           </header>
           <p class="lock-note" hidden>抽獎已經開始，名單已鎖定。要修改的話，到「<a href="#draw">抽獎</a>」頁在得獎名單下面按「重新開始抽獎」。</p>
           <div class="seg" role="radiogroup" aria-label="名單類型" id="import-type">
@@ -1096,6 +1122,16 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <p class="sr-only" id="announcer" aria-live="polite"></p>
+<dialog class="confirm" id="confirm" aria-labelledby="confirm-title" aria-describedby="confirm-text">
+  <form method="dialog" class="confirm-box">
+    <h2 class="confirm-title" id="confirm-title"></h2>
+    <p class="confirm-text" id="confirm-text"></p>
+    <div class="confirm-actions">
+      <button class="btn" value="cancel" id="confirm-cancel" autofocus>取消</button>
+      <button class="btn btn-primary" value="ok" id="confirm-ok">確定</button>
+    </div>
+  </form>
+</dialog>
 
 <script>
 (function () {
@@ -1688,22 +1724,35 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     a.textContent = '';
     setTimeout(function () { a.textContent = msg; }, 30);
   }
-  // Two-step confirmation inside the page (the viewer does not show confirm dialogs).
-  function twoStep(btn, armedText, action) {
-    var orig = btn.textContent;
-    var timer = null;
-    btn.addEventListener('click', function () {
-      if (btn.dataset.armed === '1') {
-        clearTimeout(timer);
-        btn.dataset.armed = '';
-        btn.textContent = orig;
-        action();
-        return;
-      }
-      btn.dataset.armed = '1';
-      btn.textContent = armedText;
-      timer = setTimeout(function () { btn.dataset.armed = ''; btn.textContent = orig; }, 3500);
+  // Ask before removing anything: a dialog over the page says what will happen, with 取消 and a
+  // red button named after the action. 取消 has the focus, so Enter alone never deletes.
+  // o = { title, text, ok, action }; the action runs only after the red button is pressed.
+  var confirmAction = null;
+  function ask(o) {
+    var d = $('#confirm');
+    if (typeof d.showModal !== 'function') {
+      if (window.confirm(o.title + (o.text ? '\n\n' + o.text : ''))) o.action();
+      return;
+    }
+    if (d.open) return;
+    $('#confirm-title').textContent = o.title;
+    $('#confirm-text').textContent = o.text || '';
+    $('#confirm-text').hidden = !o.text;
+    $('#confirm-ok').textContent = o.ok;
+    confirmAction = o.action;
+    d.returnValue = '';
+    d.showModal();
+    $('#confirm-cancel').focus();
+  }
+  function wireConfirm() {
+    var d = $('#confirm');
+    d.addEventListener('close', function () {
+      var act = confirmAction;
+      confirmAction = null;
+      if (d.returnValue === 'ok' && act) act();
     });
+    // A click on the dimmed page around the box cancels
+    d.addEventListener('click', function (e) { if (e.target === d) d.close(); });
   }
 
   // ---------- Rendering ----------
@@ -1861,36 +1910,31 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
 
   function renderBatches() {
     var box = $('#batches');
+    // 清空名單 sits at the top of step 1 and shows once there is a list to clear
+    $('#btn-clear-lists').hidden = !state.batches.length;
     if (!state.batches.length) {
       box.replaceChildren(el('p', { class: 'hint' }, '還沒有名單。先貼上留言者名單，或匯入 CSV 檔。'));
       return;
     }
-    // 全部移除: every imported list at once. Rules and prizes stay; the sample data is cleared as a whole.
-    var clearAll = el('button', { type: 'button', class: 'btn btn-ghost danger', id: 'btn-clear-lists' }, '全部移除');
-    twoStep(clearAll, '確定全部移除？', function () {
-      if (clearSampleIfNeeded()) {
-        save();
-        renderAll();
-        toast('範例已清除，從第 1 步貼上你的名單開始');
-        return;
-      }
-      var n = state.batches.length;
-      state.batches = [];
-      avGc();
-      save();
-      renderAll();
-      toast('已移除全部 ' + n + ' 份名單，條件和獎品都還在');
-    });
-    var head = el('div', { class: 'batches-head' }, el('p', { class: 'batches-title' }, '已匯入的名單（' + state.batches.length + ' 份）'), clearAll);
+    var head = el('p', { class: 'batches-title' }, '已匯入的名單（' + state.batches.length + ' 份）');
     box.replaceChildren.apply(box, [head].concat(
       state.batches.map(function (b) {
-        var rm = el('button', { type: 'button', class: 'btn btn-ghost' }, '移除');
-        twoStep(rm, '確定移除？', function () {
-          state.batches = state.batches.filter(function (x) { return x.id !== b.id; });
-          avGc();
-          save();
-          renderAll();
-          toast('已移除這份' + TYPE_LABEL[b.type] + '名單');
+        var label = TYPE_LABEL[b.type] + '名單';
+        var rm = el('button', { type: 'button', class: 'btn btn-ghost', 'aria-label': '移除這份' + label }, '移除');
+        rm.addEventListener('click', function () {
+          ask({
+            title: '移除這份' + label + '？',
+            text: '這份名單的 ' + b.records.length + ' 筆資料會拿掉，其他名單、參加條件和獎品都不會變。',
+            ok: '移除',
+            action: function () {
+              if (state.winners.length || busy || !state.batches.some(function (x) { return x.id === b.id; })) return;
+              state.batches = state.batches.filter(function (x) { return x.id !== b.id; });
+              avGc();
+              save();
+              renderAll();
+              toast('已移除這份' + label);
+            }
+          });
         });
         return el('div', { class: 'batch' },
           el('span', { class: 'pill pill-' + b.type }, TYPE_LABEL[b.type]),
@@ -2109,8 +2153,15 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     var action;
     if (w.void) action = el('span', { class: 'pill pill-void' }, '已作廢');
     else {
-      action = el('button', { type: 'button', class: 'btn btn-ghost btn-void', disabled: busy }, '作廢');
-      twoStep(action, '確定作廢？', function () { voidWinner(w.id); });
+      action = el('button', { type: 'button', class: 'btn btn-ghost btn-void', disabled: busy, 'aria-label': '作廢 ' + w.name }, '作廢');
+      action.addEventListener('click', function () {
+        ask({
+          title: '作廢「' + w.name + '」的得獎資格？',
+          text: '「' + prizeName(prizeById(w.prizeId)) + '」會空出 1 個名額可以再抽，' + w.name + ' 不會再被抽到。這筆會以「已作廢」留在抽獎紀錄和 CSV 裡。',
+          ok: '作廢',
+          action: function () { voidWinner(w.id); }
+        });
+      });
     }
     var url = safeUrl(w.url), link = safeUrl(w.link);
     var links = [];
@@ -2502,31 +2553,84 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
       }
     });
 
-    twoStep($('#btn-reset'), '確定重新開始？', function () {
-      var n = state.winners.length;
-      state.winners = [];
-      state.ui.lastWinnerId = null;
-      addLog('reset', '重新開始抽獎，清除 ' + n + ' 筆抽出結果，名單和條件解除鎖定');
-      $('#copy-box').hidden = true;
-      save();
-      renderAll();
-      toast('已重新開始，名單和條件可以修改了');
+    wireConfirm();
+    var KEEP_CSV = '要留下這次的結果，請先按「下載 CSV 紀錄」。';
+    // 清空名單: every imported list at once. Rules and prizes stay; the sample data is cleared as a whole.
+    $('#btn-clear-lists').addEventListener('click', function () {
+      if (!state.batches.length || state.winners.length || busy) return;
+      if (state.sample) {
+        ask({
+          title: '清除範例資料？',
+          text: '範例的名單、參加條件和獎品都會清除，換成空白的設定，讓你從第 1 步匯入自己的名單。',
+          ok: '清除範例',
+          action: function () {
+            if (!clearSampleIfNeeded()) return;
+            save();
+            renderAll();
+            toast('範例已清除，從第 1 步貼上你的名單開始');
+          }
+        });
+        return;
+      }
+      var n = state.batches.length;
+      ask({
+        title: '清空全部名單？',
+        text: '已匯入的 ' + n + ' 份名單（' + evaluate().people.length + ' 位參加者）會全部移除，參加條件和獎品會留著。',
+        ok: '清空名單',
+        action: function () {
+          if (!state.batches.length || state.winners.length || busy) return;
+          var count = state.batches.length;
+          state.batches = [];
+          avGc();
+          save();
+          renderAll();
+          toast('已移除全部 ' + count + ' 份名單，條件和獎品都還在');
+        }
+      });
     });
-    twoStep($('#btn-wipe'), '確定清除全部？', function () {
-      var anim = state.ui.anim;
-      state = makeEmpty();
-      state.ui.anim = anim;
-      avClear();
-      pending = null;
-      $('#paste').value = '';
-      syncRuleInputs();
-      syncImportUI();
-      renderPrizeEditor(true);
-      $('#copy-box').hidden = true;
-      save();
-      renderAll();
-      goView('setup');
-      toast('已清除全部資料，從第 1 步匯入新的名單');
+    $('#btn-reset').addEventListener('click', function () {
+      if (!state.winners.length || busy) return;
+      ask({
+        title: '重新開始抽獎？',
+        text: '已抽出的 ' + state.winners.length + ' 筆結果會清除，名單和條件會解除鎖定，可以再修改。' + KEEP_CSV,
+        ok: '重新開始',
+        action: function () {
+          if (!state.winners.length || busy) return;
+          var n = state.winners.length;
+          state.winners = [];
+          state.ui.lastWinnerId = null;
+          addLog('reset', '重新開始抽獎，清除 ' + n + ' 筆抽出結果，名單和條件解除鎖定');
+          $('#copy-box').hidden = true;
+          save();
+          renderAll();
+          toast('已重新開始，名單和條件可以修改了');
+        }
+      });
+    });
+    $('#btn-wipe').addEventListener('click', function () {
+      if (busy) return;
+      ask({
+        title: '清除全部資料？',
+        text: '名單、參加條件、獎品、得獎名單和抽獎紀錄都會刪除，無法復原。' + (state.winners.length ? KEEP_CSV : ''),
+        ok: '清除全部',
+        action: function () {
+          if (busy) return;
+          var anim = state.ui.anim;
+          state = makeEmpty();
+          state.ui.anim = anim;
+          avClear();
+          pending = null;
+          $('#paste').value = '';
+          syncRuleInputs();
+          syncImportUI();
+          renderPrizeEditor(true);
+          $('#copy-box').hidden = true;
+          save();
+          renderAll();
+          goView('setup');
+          toast('已清除全部資料，從第 1 步匯入新的名單');
+        }
+      });
     });
     $('#btn-tool-ok').addEventListener('click', function () {
       state.ui.oldTool = null;
