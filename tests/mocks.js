@@ -123,6 +123,38 @@ function fbSharesPage() {
   <div role="dialog" aria-label="分享這則貼文的用戶"><div style="height:300px;overflow-y:auto">${items}</div></div></body></html>`;
 }
 
+// A post where the likes and shares lists open as pop-ups from the post, like on Facebook:
+// for the guided flow (留言 first, then 按讚 / 分享 pressed on the panel before the list is open).
+function fbFlowPage() {
+  const commenters = [['陳小明', 'xiaoming.chen'], ['Amy Lim', 'amy.lim.123'], ['林雅婷', 'profile.php?id=100045'], ['Jason Tan', 'jason.tan.9']];
+  const comments = commenters.map((p, i) => fbComment({ id: 'F' + (i + 1), name: p[0], path: p[1], text: '我要抽！' })).join('');
+  const likers = [['陳小明', 'xiaoming.chen'], ['Amy Lim', 'amy.lim.123']].concat(Array.from({ length: 6 }, (_, i) => ['按讚粉絲 ' + i, 'fan.like.' + i]));
+  const likeRows = likers.map(p => `<div style="height:44px"><a href="https://www.facebook.com/${p[1]}"><span>${p[0]}</span></a> <div role="button">加朋友</div></div>`).join('');
+  const shareRows = [['陳小明', 'xiaoming.chen'], ['分享粉絲 1', 'fan.share.1'], ['分享粉絲 2', 'fan.share.2']]
+    .map(p => `<div role="article"><a href="https://www.facebook.com/${p[1]}"><span>${p[0]}</span></a><div dir="auto">分享了一則貼文</div></div>`).join('');
+  const dlg = 'position:fixed;top:60px;left:120px;width:420px;background:#fff;border:1px solid #999;padding:8px';
+  return `<!doctype html><html><head>${common}</head><body>
+  <div role="main"><div role="article">
+    <a href="https://www.facebook.com/brandpage" role="link"><span>品牌粉專</span></a>
+    <div dir="auto">抽獎！留言、按讚、分享</div>
+    <div role="button" id="reactions" style="display:inline-block;padding:4px"><span>👍❤️</span> <span>8</span></div>
+    <div role="button" id="shares" style="display:inline-block;padding:4px"><span>3 次分享</span></div>
+    <div id="comments">${comments}</div>
+    <div><div contenteditable="true" role="textbox" aria-label="留言……"></div></div>
+  </div></div>
+  <script>
+    const reactions = ${JSON.stringify(`<div role="dialog" aria-labelledby="rt" style="${dlg}"><h2 id="rt" style="font-size:1px">　</h2><div role="button" aria-label="關閉">×</div><div role="tablist"><div role="tab">全部 8</div><div role="tab">讚 6</div><div role="tab">大心 2</div></div><div style="height:240px;overflow-y:auto">${likeRows}</div></div>`)};
+    const shares = ${JSON.stringify(`<div role="dialog" aria-label="分享這則貼文的用戶" style="${dlg}"><div role="button" aria-label="關閉">×</div><div style="height:240px;overflow-y:auto">${shareRows}</div></div>`)};
+    document.addEventListener('click', (e) => {
+      const t = e.target.closest('[role=button]');
+      if (!t) return;
+      if (t.id === 'reactions') setTimeout(() => document.body.insertAdjacentHTML('beforeend', reactions), 200);
+      else if (t.id === 'shares') setTimeout(() => document.body.insertAdjacentHTML('beforeend', shares), 200);
+      else if (t.getAttribute('aria-label') === '關閉') t.closest('[role=dialog]').remove();
+    });
+  </script></body></html>`;
+}
+
 function xArticle(t) {
   return `<article data-testid="tweet" role="article" tabindex="0">
     <div data-testid="Tweet-User-Avatar"><a href="/${t.handle}" role="link"><img alt="" width="40" height="40" src="https://pbs.twimg.com/profile_images/1${t.id}/${t.handle}_normal.jpg"></a></div>
@@ -171,6 +203,29 @@ function xPostPage() {
     });
     document.addEventListener('click', (e) => {
       if (e.target.closest('#showmore')) setTimeout(() => { extra = true; draw(); }, 300);
+    });
+  </script></body></html>`;
+}
+
+// X switches to the likes list without loading a new page (the address changes to /likes).
+function xFlowPage() {
+  return `<!doctype html><html><head>${common}</head><body>
+  <main><div data-testid="primaryColumn"><div id="feed"></div></div></main>
+  <script>
+    window.__xArticle = ${xArticle.toString()};
+    const focal = { id: '222', handle: 'brand', name: 'Brand', text: '抽獎！回覆、按讚、轉發', focal: true };
+    const replies = [1, 2, 3].map(i => ({ id: String(3000 + i), handle: 'fan_' + i, name: 'Fan ' + i, text: '我要抽' }));
+    const feed = document.getElementById('feed');
+    function post() { feed.innerHTML = __xArticle(focal) + '<a href="/brand/status/222/likes" id="likes-link" role="link">5 Likes</a>' + replies.map(__xArticle).join(''); }
+    function likes() {
+      feed.innerHTML = '<div aria-label="Timeline: Liked by">' + [0, 1, 2, 3, 4].map(i => '<div data-testid="UserCell" style="height:80px"><a href="/liker_' + i + '"><span>Liker ' + i + '</span></a><a href="/liker_' + i + '" tabindex="-1"><span>@liker_' + i + '</span></a><button>Follow</button></div>').join('') + '</div>';
+    }
+    post();
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#likes-link')) return;
+      e.preventDefault();
+      history.pushState({}, '', '/brand/status/222/likes');
+      setTimeout(likes, 300);
     });
   </script></body></html>`;
 }
@@ -238,7 +293,9 @@ module.exports = {
   'https://www.facebook.com/brandpage/posts/pfbid0abc': fbPostPage,
   'https://www.facebook.com/brandpage/posts/pfbid0likes': fbReactionsPage,
   'https://www.facebook.com/brandpage/posts/pfbid0shares': fbSharesPage,
+  'https://www.facebook.com/brandpage/posts/pfbid0flow': fbFlowPage,
   'https://x.com/brand/status/111': xPostPage,
+  'https://x.com/brand/status/222': xFlowPage,
   'https://x.com/brand/status/111/likes': xLikesPage,
   'https://www.threads.com/@brandtw/post/DAbc123': thPostPage,
   'https://www.threads.com/@brandtw/post/DAbc123/likes': thLikesPage,

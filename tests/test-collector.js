@@ -24,6 +24,7 @@ async function runOn(browser, url, opts = {}) {
   page.on('pageerror', e => errors.push(e.message));
   await page.goto(url);
   await page.waitForTimeout(200);
+  if (opts.before) { await opts.before(page); await page.waitForTimeout(400); }
   await page.evaluate(code);
   let result = null, raw = '';
   if (!opts.noWait) {
@@ -40,6 +41,15 @@ async function runOn(browser, url, opts = {}) {
 }
 const panel = (page) => page.evaluate(() => document.getElementById('giveaway-collector-host')?.shadowRoot?.textContent || '');
 const btn = (page, text) => page.locator('#giveaway-collector-host button', { hasText: text });
+// The next finished list after `prev` (each run stores its JSON in window.__giveawayResult).
+async function nextResult(page, prev) {
+  try {
+    await page.waitForFunction((p) => window.__giveawayResult && window.__giveawayResult !== p, prev, { timeout: 60000, polling: 300 });
+  } catch (e) { return { raw: '', result: null }; }
+  const raw = await page.evaluate(() => window.__giveawayResult);
+  return { raw, result: JSON.parse(raw) };
+}
+const copyNow = async (page) => { await btn(page, /複製結果|已複製|再複製一次/).first().click(); await page.waitForTimeout(300); };
 
 // Centre colour of an avatar thumbnail, compared with the colour the simulated CDN served.
 async function avatarMatches(page, dataUrl, srcUrl) {
@@ -200,6 +210,94 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   check(diag && diag.avatars && diag.avatars.found === 12 && diag.avatars.failed === 12 && diag.avatars.hosts['cdninstagram.com'] === 12, 'Threads likes: diagnostics count the blocked avatars ' + JSON.stringify(diag && diag.avatars));
   check(/已複製診斷資訊/.test(await panel(r.page)), 'Threads likes: diagnostics copy is confirmed');
   check(!r.errors.length, 'Threads likes: no page errors ' + JSON.stringify(r.errors));
+  await r.ctx.close();
+
+  // Guided flow (v1.3): comments first, then 按讚 / 分享 pressed on the panel before the list is open.
+  r = await runOn(browser, 'https://www.facebook.com/brandpage/posts/pfbid0flow');
+  check(r.result && r.result.kind === 'comment' && r.result.items.length === 4, 'Flow FB: 4 comments first (got ' + (r.result && r.result.items.length) + ')');
+  await r.ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'https://www.facebook.com' });
+  await copyNow(r.page);
+  let ft = await panel(r.page);
+  check(/還要抓按讚或分享的人/.test(ft) && await btn(r.page, '抓按讚').count() === 1 && await btn(r.page, '抓分享').count() === 1, 'Flow FB: after copying, the panel offers 抓按讚 and 抓分享');
+  const shotPanel = (name) => r.page.locator('#giveaway-collector-host').screenshot({ path: path.join(OUT, name) });
+  await shotPanel('shot-flow-1-next.png');
+  await btn(r.page, '抓按讚').click();
+  await r.page.waitForTimeout(1500);
+  ft = await panel(r.page);
+  check(/等你打開按讚名單/.test(ft) && /表情符號旁邊的數字/.test(ft) && /名單已經打開了/.test(ft) && await r.page.evaluate(() => window.__giveawayResult) === r.raw,
+    'Flow FB: 按讚 without the likes list open waits and reads nothing');
+  check(await r.page.evaluate(() => document.getElementById('giveaway-collector-host').shadowRoot.querySelector('span[style*="tabular-nums"]').parentElement.style.display) === 'none', 'Flow FB: no "0 位按讚的人" while waiting');
+  await shotPanel('shot-flow-2-wait.png');
+  await r.page.click('#reactions');
+  const fl = await nextResult(r.page, r.raw);
+  const flNames = fl.result ? fl.result.items.map(i => i.name) : [];
+  check(fl.result && fl.result.kind === 'like' && flNames.length === 8 && flNames.includes('陳小明') && !flNames.includes('Jason Tan') && !flNames.includes('品牌粉專'),
+    'Flow FB: opening the likes list starts by itself: 8 likers, no commenters who did not like (' + flNames.join(',') + ')');
+  await copyNow(r.page);
+  ft = await panel(r.page);
+  check(/還要抓分享的人/.test(ft) && await btn(r.page, '抓分享').count() === 1 && await btn(r.page, '抓按讚').count() === 0, 'Flow FB: after the likes, only 抓分享 is left');
+  await r.page.screenshot({ path: path.join(OUT, 'shot-flow-3-likes.png') });
+  check(JSON.parse(await r.page.evaluate(() => navigator.clipboard.readText())).kind === 'like', 'Flow FB: the likes are on the clipboard');
+  await btn(r.page, '抓分享').click();
+  await r.page.waitForTimeout(800);
+  ft = await panel(r.page);
+  check(/現在打開的是按讚名單/.test(ft) && /請先關掉它，再點貼文下方的「N 次分享」/.test(ft) && await r.page.evaluate(() => window.__giveawayResult) === fl.raw,
+    'Flow FB: 分享 with the likes list still open asks to close it, and does not read the likes as shares');
+  await shotPanel('shot-flow-4-close-first.png');
+  await r.page.click('[role=dialog] [aria-label="關閉"]');
+  await r.page.click('#shares');
+  const fs2 = await nextResult(r.page, fl.raw);
+  check(fs2.result && fs2.result.kind === 'share' && fs2.result.items.length === 3, 'Flow FB: then the shares list starts by itself: 3 sharers (got ' + (fs2.result && fs2.result.items.length) + ')');
+  await copyNow(r.page);
+  ft = await panel(r.page);
+  check(/三份名單都抓好了/.test(ft) && /第 2 步勾選參加條件/.test(ft), 'Flow FB: all three lists done, the panel points to 參加條件');
+  await shotPanel('shot-flow-5-done.png');
+  await btn(r.page, /^留言$/).click();
+  await r.page.waitForTimeout(400);
+  ft = await panel(r.page);
+  check(/抓到 4 則留言/.test(ft) && await r.page.evaluate(() => window.__giveawayResult) === fs2.raw, 'Flow FB: 留言 shows the comments again without reading them again');
+  await copyNow(r.page);
+  check(JSON.parse(await r.page.evaluate(() => navigator.clipboard.readText())).kind === 'comment', 'Flow FB: copying from there copies the comments');
+  // 名單已經打開了 with no list open: reads the page, and says so
+  await r.page.click('[role=dialog] [aria-label="關閉"]');
+  await btn(r.page, /^按讚$/).click();
+  await r.page.waitForTimeout(300);
+  check(/抓到 8 位按讚的人/.test(await panel(r.page)), 'Flow FB: 按讚 shows the stored likes');
+  await btn(r.page, '重新抓取').click();
+  await r.page.waitForTimeout(800);
+  check(/等你打開按讚名單/.test(await panel(r.page)), 'Flow FB: 重新抓取 with the list closed waits for it');
+  await btn(r.page, '名單已經打開了').click();
+  const ff = await nextResult(r.page, fs2.raw);
+  ft = await panel(r.page);
+  check(ff.result && ff.result.kind === 'like' && /沒有找到名單視窗/.test(ft), 'Flow FB: 名單已經打開了 without a list reads the page and warns about it');
+  check(!r.errors.length, 'Flow FB: no page errors ' + JSON.stringify(r.errors));
+  await r.ctx.close();
+
+  // Bookmark pressed with the likes list open, then 抓留言: waits for the list to be closed
+  r = await runOn(browser, 'https://www.facebook.com/brandpage/posts/pfbid0flow', { before: (p) => p.click('#reactions') });
+  check(r.result && r.result.kind === 'like' && r.result.items.length === 8, 'Flow FB: bookmark pressed on the open likes list reads the likes (got ' + (r.result && r.result.items.length) + ')');
+  await r.ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'https://www.facebook.com' });
+  await copyNow(r.page);
+  check(/還要抓留言或分享的人/.test(await panel(r.page)), 'Flow FB: then offers 抓留言 and 抓分享');
+  await btn(r.page, '抓留言').click();
+  await r.page.waitForTimeout(800);
+  check(/請先關掉按讚或分享的名單視窗/.test(await panel(r.page)) && await r.page.evaluate(() => window.__giveawayResult) === r.raw, 'Flow FB: 抓留言 with the likes list open waits for it to close');
+  await r.page.click('[role=dialog] [aria-label="關閉"]');
+  const fc = await nextResult(r.page, r.raw);
+  check(fc.result && fc.result.kind === 'comment' && fc.result.items.length === 4, 'Flow FB: closing the list starts the comments by itself (got ' + (fc.result && fc.result.items.length) + ')');
+  await r.ctx.close();
+
+  // X: the likes list is a page of its own; the panel follows the address change
+  r = await runOn(browser, 'https://x.com/brand/status/222');
+  check(r.result && r.result.kind === 'comment' && r.result.items.length === 3, 'Flow X: 3 replies first (got ' + (r.result && r.result.items.length) + ')');
+  await btn(r.page, /^按讚$/).click();
+  await r.page.waitForTimeout(800);
+  ft = await panel(r.page);
+  check(/等你打開按讚名單/.test(ft) && /\/likes/.test(ft), 'Flow X: 按讚 waits for the /likes page');
+  await r.page.click('#likes-link');
+  const xl = await nextResult(r.page, r.raw);
+  check(xl.result && xl.result.kind === 'like' && xl.result.items.length === 5 && xl.result.items.every(i => /^@liker_\d$/.test(i.handle)), 'Flow X: the likes page is read by itself: 5 likers, no repliers (got ' + (xl.result && xl.result.items.map(i => i.handle).join(',')) + ')');
+  check(!r.errors.length, 'Flow X: no page errors ' + JSON.stringify(r.errors));
   await r.ctx.close();
 
   // Not a post page / other site

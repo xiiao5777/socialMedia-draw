@@ -40,6 +40,9 @@ const sample = (name) => {
   const brokenAnchors = await home.evaluate((hs) => hs.filter(h => !document.getElementById(h.slice(1))), anchors);
   check(anchors.length >= 6 && !brokenAnchors.length, 'home: every # link has a target ' + JSON.stringify(brokenAnchors));
   check((await htxt('.meta')).includes('v' + VER) && (await htxt('#whats-new h3')) === 'v' + VER + ' 更新了', 'home: shows the newest tool version v' + VER);
+  const combo = await home.$$eval('#combo ol.steps > li', ls => ls.map(l => l.textContent));
+  check(combo.length === 4 && combo[1].includes('在工具上按「按讚」') && combo[3].includes('需要留言') && combo[3].includes('需要分享'), 'home: step-by-step 留言＋按讚＋分享 walkthrough ' + JSON.stringify(combo.map(t => t.slice(0, 6))));
+  check(!(await home.$eval('main', m => m.textContent)).includes('再按一次書籤'), 'home: no more 「再按一次書籤」');
   check(await home.$eval('.foot a', a => a.href) === REPO && (await htxt('.foot')).includes('v' + VER), 'home: footer links to the GitHub repository');
   const bm = bookmarklet();
   const href = await home.$eval('#bookmarklet', a => a.getAttribute('href'));
