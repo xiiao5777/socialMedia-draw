@@ -13,7 +13,7 @@ Facebook、X、Threads 貼文抽獎工具。抓下貼文的留言、按讚和分
 
 1. 在[首頁](https://xiiao5777.github.io/socialMedia-draw/#install)把「抓取抽獎名單」按鈕拖到瀏覽器的書籤列（每台電腦裝一次）。
 2. 打開 Facebook、X 或 Threads 的貼文，按書籤列的「抓取抽獎名單」，跑完按「複製結果」。要抓按讚或分享的人，就在工具上按「按讚」或「分享」，再點開貼文的那份名單，工具會自動開始抓。
-3. 到[抽獎頁](https://xiiao5777.github.io/socialMedia-draw/draw.html)第 1 步貼上（留言、按讚、分享各貼一次），設定條件和獎品，按「抽出 1 位」。
+3. 到[抽獎頁](https://xiiao5777.github.io/socialMedia-draw/draw.html)的「準備」頁第 1 步貼上（留言、按讚、分享各貼一次），設定條件和獎品，再到「抽獎」頁按「抽出 1 位」。
 
 各平台的詳細步驟和常見問題都在首頁。遇到問題請到 [Issues](https://github.com/xiiao5777/socialMedia-draw/issues) 回報。
 
@@ -22,7 +22,7 @@ Facebook、X、Threads 貼文抽獎工具。抓下貼文的留言、按讚和分
 | 檔案 | 用途 |
 | --- | --- |
 | `index.html` | 首頁：安裝說明、使用教學、常見問題。由 `build.js` 產生，請改 `src/index.template.html` |
-| `draw.html` | 抽獎頁 |
+| `draw.html` | 抽獎頁（「準備」和「抽獎」兩頁，網址的 `#setup` / `#draw` 決定顯示哪一頁） |
 | `theme.js` | 黑底／白底切換，兩個頁面共用，選擇存在瀏覽器裡 |
 | `src/index.template.html` | 首頁的原始檔 |
 | `src/collector.js` | 名單抓取工具（書籤）的原始碼 |
