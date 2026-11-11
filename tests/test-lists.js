@@ -243,6 +243,123 @@ function bigList(n) {
   check(b1[0] > 0 && b1[1] <= 620 && b2[0] > 0 && b2[1] <= 620 && barOk, '抽出 1 位 is on screen at 1366×620, with the tabs still there ' + JSON.stringify([b1, b2]));
   await ctx4.close();
 
+  // ---------- 關掉分頁就清除: a giveaway lasts while a tab that has it is open ----------
+  const ctx5 = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await serveSite(ctx5);
+  const stores = (p) => p.evaluate(() => new Promise(resolve => {
+    const out = { keys: Object.keys(localStorage).filter(k => !k.startsWith('giveaway-draw:open:')).sort().join() };
+    const r1 = indexedDB.open('giveaway-draw-state');
+    r1.onsuccess = () => {
+      const db = r1.result;
+      if (!db.objectStoreNames.contains('state')) { out.big = 'none'; avs(); return; }
+      const g = db.transaction('state').objectStore('state').get('state');
+      g.onsuccess = () => { out.big = g.result === undefined ? 'none' : 'saved'; avs(); };
+    };
+    function avs() {
+      const r2 = indexedDB.open('giveaway-draw-avatars');
+      r2.onsuccess = () => {
+        const db = r2.result;
+        if (!db.objectStoreNames.contains('avatars')) { out.avatars = 0; resolve(out); return; }
+        const c = db.transaction('avatars').objectStore('avatars').count();
+        c.onsuccess = () => { out.avatars = c.result; resolve(out); };
+      };
+    }
+  }));
+  const t1 = await ctx5.newPage();
+  watch(t1, 'tab1');
+  await t1.goto(url + '#setup');
+  await t1.waitForTimeout(300);
+  await pasteInto(t1, '#paste', bigList(16000));
+  await t1.click('#btn-add');
+  await t1.waitForTimeout(2500);
+  await pasteInto(t1, 'body', result('like', [{ name: 'Amy', handle: 'fb:amy' }], { avatars: { 'fb:amy': 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==' } }));
+  await t1.waitForTimeout(1500);
+  check(await txt(t1, '#s-people') === '16001' && (await stores(t1)).big === 'saved' && (await stores(t1)).avatars === 1, 'a big giveaway with an avatar is saved ' + JSON.stringify(await stores(t1)));
+  await t1.reload();
+  await t1.waitForTimeout(1500);
+  check(await txt(t1, '#s-people') === '16001', 'a reload keeps the giveaway');
+  // A duplicated tab copies sessionStorage: closing one of the two leaves the other listed
+  const openCount = (p) => p.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('giveaway-draw:open:')).length);
+  const dup = await ctx5.newPage();
+  watch(dup, 'dup');
+  await dup.goto(SITE);
+  await dup.evaluate((n) => sessionStorage.setItem('giveaway-draw:tab', n), await t1.evaluate(() => sessionStorage.getItem('giveaway-draw:tab')));
+  await dup.goto(url);
+  await dup.waitForTimeout(1500);
+  const dupOk = await txt(dup, '#s-people') === '16001' && await openCount(dup) === 2;
+  await dup.close();
+  const t6 = await ctx5.newPage();
+  watch(t6, 'tab6');
+  await t6.goto(url);
+  await t6.waitForTimeout(1500);
+  check(dupOk && await txt(t6, '#s-people') === '16001' && await openCount(t6) === 2, 'closing a duplicated tab keeps the giveaway for the tab it was copied from');
+  await t6.close();
+  // This tab goes to the homepage: the giveaway is still open in it
+  await t1.goto(SITE);
+  await t1.waitForTimeout(300);
+  check(await t1.isVisible('#resume') && (await txt(t1, '#resume-text')).includes('關掉所有抽獎系統的分頁，這場抽獎就會清除'), 'the homepage in that tab says the giveaway is open and when it goes away');
+  const t2 = await ctx5.newPage();
+  watch(t2, 'tab2');
+  await t2.goto(url);
+  await t2.waitForTimeout(1500);
+  check(await txt(t2, '#s-people') === '16001', 'a new draw tab shows it while another tab has it open');
+  await t2.close();
+  await t1.goto(url);
+  await t1.waitForTimeout(1500);
+  check(await txt(t1, '#s-people') === '16001', 'back on the draw page in the same tab, it is all there');
+  // Close the last tab: the next visit starts over, with nothing left behind
+  await t1.close();
+  const h = await ctx5.newPage();
+  watch(h, 'home-after');
+  await h.goto(SITE);
+  await h.waitForTimeout(300);
+  check(await h.isHidden('#resume') && (await h.$eval('#cta-draw', a => a.textContent + (a.classList.contains('btn-primary') ? '*' : ''))) === '開始抽獎*' && await h.isVisible('#whats-new'),
+    'after closing it, the homepage offers a new giveaway (as to someone who used it before)');
+  const t3 = await ctx5.newPage();
+  watch(t3, 'tab3');
+  await t3.goto(url);
+  await t3.waitForTimeout(800);
+  const st3 = await stores(t3);
+  check(await txt(t3, '#s-people') === '0' && await t3.isHidden('#sample-banner') && await t3.isVisible('#import-how'), 'the next draw tab starts empty, without the sample');
+  check(st3.keys === 'giveaway-draw:used' && st3.big === 'none' && st3.avatars === 0, 'the closed giveaway is deleted: lists, summary, IndexedDB copy and avatars ' + JSON.stringify(st3));
+  // A tab that is asleep (still listed) keeps it; one not heard from for 12 hours does not
+  await pasteInto(t3, 'body', result('comment', [{ name: 'Ben', handle: 'fb:ben', text: 'hi' }]));
+  await t3.waitForTimeout(300);
+  await t3.evaluate(() => localStorage.setItem('giveaway-draw:open:asleep', String(Date.now())));
+  await t3.close();
+  const t4 = await ctx5.newPage();
+  watch(t4, 'tab4');
+  await t4.goto(url);
+  await t4.waitForTimeout(500);
+  check(await txt(t4, '#s-people') === '1', 'a tab still listed (asleep in the background) keeps the giveaway');
+  await t4.evaluate(() => localStorage.setItem('giveaway-draw:open:asleep', String(Date.now() - 13 * 3600 * 1000)));
+  await t4.close();
+  const t5 = await ctx5.newPage();
+  watch(t5, 'tab5');
+  await t5.goto(url);
+  await t5.waitForTimeout(500);
+  check(await txt(t5, '#s-people') === '0' && await t5.evaluate(() => localStorage.getItem('giveaway-draw:open:asleep')) === null, 'a tab not heard from for 12 hours is forgotten, and the giveaway with it');
+  // A tab opened before this version has neither the note nor a listing: a reload still keeps its giveaway
+  await pasteInto(t5, 'body', result('comment', [{ name: 'Cy', handle: 'fb:cy', text: 'hi' }]));
+  await t5.waitForTimeout(500);
+  await t5.evaluate(() => {
+    sessionStorage.clear();
+    Object.keys(localStorage).filter(k => k.startsWith('giveaway-draw:open:')).forEach(k => localStorage.removeItem(k));
+  });
+  await t5.reload();
+  await t5.waitForTimeout(500);
+  check(await txt(t5, '#s-people') === '1' && await openCount(t5) === 1, 'a reload keeps the giveaway, even in a tab opened before this version');
+  // Back from the back-forward cache, the page shows what is saved now: unchanged, or deleted meanwhile by a new tab
+  const backFromCache = () => t5.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+  await backFromCache();
+  await t5.waitForTimeout(300);
+  const kept = await txt(t5, '#s-people');
+  await t5.evaluate(() => localStorage.removeItem('giveaway-draw:v1'));
+  await backFromCache();
+  await t5.waitForTimeout(300);
+  check(kept === '1' && await txt(t5, '#s-people') === '0', 'back from the back-forward cache, a page shows the giveaway as saved now (' + kept + ', then deleted)');
+  await ctx5.close();
+
   check(!errors.length, 'no page errors ' + JSON.stringify(errors));
   await browser.close();
   done();

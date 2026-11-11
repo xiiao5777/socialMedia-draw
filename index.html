@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>抽獎系統｜Facebook、X、Threads 貼文抽獎</title>
-<meta name="description" content="免費的貼文抽獎工具：抓下 Facebook、X、Threads 貼文的留言、按讚和分享名單，設定參加條件和獎品，公平地隨機抽出得獎者。不用登入，名單只存在你自己的瀏覽器。">
+<meta name="description" content="免費的貼文抽獎工具：抓下 Facebook、X、Threads 貼文的留言、按讚和分享名單，設定參加條件和獎品，公平地隨機抽出得獎者。不用登入，名單只留在你的瀏覽器，關掉抽獎系統的分頁就清除。">
 <meta property="og:type" content="website">
 <meta property="og:title" content="抽獎系統｜Facebook、X、Threads 貼文抽獎">
 <meta property="og:description" content="抓下貼文的留言、按讚和分享名單，設定條件和獎品，公平地隨機抽出得獎者。免費、不用登入。">
@@ -434,9 +434,9 @@ details.more-code[open] summary { margin-bottom: 8px; }
         </div>
         <p class="kicker">FACEBOOK・X・THREADS</p>
         <h1 id="h-hero">貼文抽獎，<br>三步驟搞定</h1>
-        <p class="lede">抓下貼文的留言、按讚和分享名單，設定參加條件和獎品，公平地隨機抽出得獎者。免費、不用登入，名單只存在你自己的瀏覽器。</p>
+        <p class="lede">抓下貼文的留言、按讚和分享名單，設定參加條件和獎品，公平地隨機抽出得獎者。免費、不用登入，名單只留在你的瀏覽器，關掉抽獎系統的分頁就清除。</p>
         <div class="resume" id="resume" role="status" hidden>
-          <b>你上次的抽獎還在</b>
+          <b>你的抽獎還開著</b>
           <span id="resume-text"></span>
         </div>
         <div class="cta">
@@ -599,7 +599,7 @@ details.more-code[open] summary { margin-bottom: 8px; }
           <li><p><b>抓分享：</b>關掉按讚名單，在工具上按「分享」，再點開分享名單。跑完一樣按「送到抽獎系統」。</p></li>
           <li><p><b>設條件：</b>名單送到後，抽獎系統會自動勾選第 2 步的「需要留言」「需要按讚」「需要分享」，確認一下就好。只有三樣都做到的人會被抽到。</p></li>
         </ol>
-        <p class="note">工具已經關掉的話，也可以先點開按讚或分享的名單，再按書籤列的「抓取抽獎名單」，工具會自己認出是哪一種名單。</p>
+        <p class="note">抓完三份名單之前，請不要關掉抽獎系統的分頁：關掉的話，已經送過去的名單會清除。工具已經關掉的話，也可以先點開按讚或分享的名單，再按書籤列的「抓取抽獎名單」，工具會自己認出是哪一種名單。</p>
       </div>
       <h3 class="sub-title" id="h-platforms">各平台怎麼抓</h3>
       <div class="ptabs" id="ptabs" role="tablist" aria-labelledby="h-platforms" hidden>
@@ -677,8 +677,8 @@ details.more-code[open] summary { margin-bottom: 8px; }
       <div class="sec-head"><h2 id="h-faq">常見問題</h2></div>
       <div class="faq">
         <details><summary>要付費或登入嗎？</summary><p>不用。整個網站免費，不用註冊、不用登入，也不用給任何帳號權限。抓取工具只讀你自己畫面上看得到的名單。</p></details>
-        <details><summary>抽獎資料存在哪裡？</summary><p>存在你這台電腦的瀏覽器裡，不會上傳到任何伺服器。換電腦、換瀏覽器、用無痕視窗或清除瀏覽資料，就看不到之前的抽獎了，抽完記得「下載 CSV 紀錄」或「複製得獎公告」保存。</p></details>
-        <details><summary>要辦下一次抽獎怎麼做？</summary><p>抽獎系統一次保存一場抽獎。先把這次的結果下載 CSV 保存，再到得獎名單下面按「清除全部資料」，就能從第 1 步重新開始。</p></details>
+        <details><summary>抽獎資料存在哪裡？會留著嗎？</summary><p>只存在你這台電腦的瀏覽器裡，不會上傳到任何伺服器。抽獎系統的分頁開著時一直都在，重新整理也還在；關掉所有抽獎系統的分頁，這場抽獎就會清除，下次打開是新的抽獎。所以抽完記得按「下載 CSV 紀錄」或「複製得獎公告」保存，抓名單的途中也不要關掉抽獎系統的分頁。</p></details>
+        <details><summary>要辦下一次抽獎怎麼做？</summary><p>先把這次的結果下載 CSV 保存，再關掉抽獎系統的分頁，重新打開就是新的抽獎。不想關分頁的話，也可以在得獎名單下面按「清除全部資料」。</p></details>
         <details><summary>抽獎公平嗎？</summary><p>抽獎用瀏覽器內建的密碼學亂數，每位符合資格的人機會都一樣。同一個人留言很多次也只算一次，抽出的人會移出抽獎池。每次抽出都會記下時間和當時抽獎池人數，CSV 紀錄裡都有。</p></details>
         <details><summary>抓的時候可以切到別的分頁嗎？</summary><p>請不要。瀏覽器會把背景分頁放慢，工具可能停住或抓不完整。留言很多時要等幾分鐘，跑完會顯示「送到抽獎系統」按鈕。</p></details>
         <details><summary>按讚和分享的人要怎麼抓？</summary><p>先照平常抓完留言，然後在工具上按「按讚」或「分享」，再點開貼文的按讚或分享名單，工具會自動開始抓。名單送到抽獎系統後，第 2 步會自動勾選對應的條件，不需要的可以取消。完整步驟在上面的<a href="#combo">使用教學</a>。</p></details>
@@ -712,18 +712,48 @@ details.more-code[open] summary { margin-bottom: 8px; }
     timer = setTimeout(function () { t.hidden = true; }, 3600);
   }
 
-  // Repeat visitors: the draw page leaves a short summary of the giveaway in progress.
+  // The giveaway in progress: the draw page leaves a short summary, and lists each page that has the
+  // giveaway open (it is deleted once the last one closes, see draw.html). A tab that came here from
+  // the draw page still has it (sessionStorage notes it), so this page is listed while it is open.
   var SUMMARY_KEY = 'giveaway-draw:summary';
+  var TAB_KEY = 'giveaway-draw:tab', OPEN_KEY = 'giveaway-draw:open:', USED_KEY = 'giveaway-draw:used';
+  var STALE_MS = 12 * 3600 * 1000;
+  var inGiveaway = false;
+  try { inGiveaway = !!sessionStorage.getItem(TAB_KEY); } catch (e) { /* blocked */ }
+  var pageId = Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+  function markOpen() { try { localStorage.setItem(OPEN_KEY + pageId, String(Date.now())); } catch (e) { /* storage unavailable */ } }
+  if (inGiveaway) {
+    markOpen();
+    setInterval(markOpen, 30000);
+    window.addEventListener('pagehide', function () { try { localStorage.removeItem(OPEN_KEY + pageId); } catch (e) { /* storage unavailable */ } });
+    window.addEventListener('pageshow', function (e) { if (e.persisted) markOpen(); });
+  }
+  function giveawayOpen() {
+    if (inGiveaway) return true;
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf(OPEN_KEY) === 0 && Date.now() - Number(localStorage.getItem(k)) < STALE_MS) return true;
+      }
+    } catch (e) { /* storage unavailable */ }
+    return false;
+  }
   function pad(n) { return String(n).padStart(2, '0'); }
   function showResume() {
-    var s = null;
-    try { s = JSON.parse(localStorage.getItem(SUMMARY_KEY) || 'null'); } catch (e) { /* storage unavailable */ }
+    var s = null, used = false;
+    try {
+      s = JSON.parse(localStorage.getItem(SUMMARY_KEY) || 'null');
+      used = !!localStorage.getItem(USED_KEY);
+    } catch (e) { /* storage unavailable */ }
+    // A giveaway left by an older version (or not yet deleted) also means it was used before
+    if (s && !s.sample && s.people > 0) used = true;
     var box = document.getElementById('resume');
     var cta = document.getElementById('cta-draw');
-    var returning = !!s && !s.sample && s.people > 0;
-    // A first visit starts with 第一次用; someone with a giveaway goes back to it. Only they had an
-    // older tool, so only they see what changed.
     var start = document.getElementById('cta-start');
+    var going = !!s && !s.sample && s.people > 0 && giveawayOpen();
+    var returning = used || going;
+    // A first visit starts with 第一次用; someone who has used it starts a giveaway (or goes back to
+    // the one still open). Only they had an older tool, so only they see what changed.
     cta.classList.toggle('btn-primary', returning);
     start.classList.toggle('btn-primary', !returning);
     start.textContent = returning ? '看使用教學' : '第一次用？從這裡開始';
@@ -731,7 +761,7 @@ details.more-code[open] summary { margin-bottom: 8px; }
     if (returning) cta.parentNode.insertBefore(cta, start); else cta.parentNode.insertBefore(start, cta);
     document.getElementById('whats-new').hidden = !returning;
     document.getElementById('meta-new').hidden = !returning;
-    if (!returning) {
+    if (!going) {
       box.hidden = true;
       cta.textContent = '開始抽獎';
       return;
@@ -741,12 +771,14 @@ details.more-code[open] summary { margin-bottom: 8px; }
     var when = isNaN(d) ? '' : '（' + (d.getMonth() + 1) + '/' + d.getDate() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ' 更新）';
     document.getElementById('resume-text').textContent = '參加者 ' + s.people + ' 位，' +
       (done ? '全部 ' + s.total + ' 名都抽完了' : s.drawn ? '已抽出 ' + s.drawn + ' / ' + s.total + ' 名' : '還沒開始抽') + when +
-      '。要辦新的抽獎，進去後在得獎名單下面按「清除全部資料」。';
+      '。關掉所有抽獎系統的分頁，這場抽獎就會清除。';
     cta.textContent = done ? '查看抽獎結果' : '繼續抽獎';
     box.hidden = false;
   }
   showResume();
-  window.addEventListener('storage', function (e) { if (e.key === SUMMARY_KEY || e.key === null) showResume(); });
+  window.addEventListener('storage', function (e) {
+    if (e.key === null || e.key === SUMMARY_KEY || e.key === USED_KEY || e.key.indexOf(OPEN_KEY) === 0) showResume();
+  });
   window.addEventListener('pageshow', function (e) { if (e.persisted) showResume(); });
 
   // Phones and tablets (a touch screen without a mouse) cannot use the bookmark

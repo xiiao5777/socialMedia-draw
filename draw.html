@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>開始抽獎｜抽獎系統</title>
-<meta name="description" content="匯入 Facebook、X、Threads 貼文的留言、按讚和分享名單，設定參加條件和獎品，公平地隨機抽出得獎者。資料只存在你的瀏覽器。">
+<meta name="description" content="匯入 Facebook、X、Threads 貼文的留言、按讚和分享名單，設定參加條件和獎品，公平地隨機抽出得獎者。名單只留在你的瀏覽器，關掉抽獎系統的分頁就清除。">
 <meta name="theme-color" content="#F2F4F7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#11151C" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
@@ -896,7 +896,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
   <header class="masthead">
     <div class="brand">
       <h1><span class="mark" aria-hidden="true">抽</span>抽獎系統</h1>
-      <p class="tagline">放進 FB、X、Threads 貼文的留言、按讚和分享名單，設定條件和獎品，公平地隨機抽出得獎者。</p>
+      <p class="tagline">放進 FB、X、Threads 貼文的留言、按讚和分享名單，設定條件和獎品，公平地隨機抽出得獎者。名單只留在你的瀏覽器，關掉抽獎系統的分頁就清除。</p>
       <nav class="sitenav" aria-label="網站">
         <a href="./">← 回首頁</a>
         <a href="./#use">使用教學</a>
@@ -1182,6 +1182,16 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
   var STORE_KEY = 'giveaway-draw:v1';
   // A few numbers for the homepage's 「繼續抽獎」 line.
   var SUMMARY_KEY = 'giveaway-draw:summary';
+  // A giveaway lasts while a page of this site that has it stays open (關掉分頁就清除). Each such page
+  // is listed under OPEN_KEY + an id of its own while it is open, and TAB_KEY in sessionStorage notes
+  // that its tab has the giveaway (a reload keeps the note, a new tab has none). A new tab that finds
+  // no other page listed deletes what was saved before it shows anything. USED_KEY only notes that
+  // this browser has run a giveaway (no names): the homepage then treats the visitor as returning,
+  // and the draw page starts empty instead of with the sample.
+  var TAB_KEY = 'giveaway-draw:tab';
+  var OPEN_KEY = 'giveaway-draw:open:';
+  var USED_KEY = 'giveaway-draw:used';
+  var STALE_MS = 12 * 3600 * 1000;  // a page not heard from for 12 hours was killed, not just asleep
   // Newest 名單抓取工具 version; build.js refuses to build when it differs from src/collector.js.
   // A pasted result from an older tool shows a banner asking to reinstall the bookmark.
   var COLLECTOR_VERSION = '1.5';
@@ -1596,7 +1606,58 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
         if (s && s.v === 1) return normalizeState(s);
       }
     } catch (e) { /* storage unavailable: start fresh */ }
-    return makeSample();
+    return usedBefore() ? makeEmpty() : makeSample();
+  }
+  function usedBefore() { try { return !!localStorage.getItem(USED_KEY); } catch (e) { return false; } }
+
+  // ---------- Open pages ----------
+  // This page's own id, never kept in sessionStorage: a duplicated tab copies sessionStorage, and
+  // closing one of the two must not unlist the other.
+  var pageId = null;
+  // Another page of this site listed as having the giveaway (old entries are crashed tabs: dropped)
+  function otherTabsOpen() {
+    var now = Date.now(), open = false;
+    try {
+      for (var i = localStorage.length - 1; i >= 0; i--) {
+        var k = localStorage.key(i);
+        if (!k || k.indexOf(OPEN_KEY) !== 0 || k === OPEN_KEY + pageId) continue;
+        if (now - Number(localStorage.getItem(k)) < STALE_MS) open = true;
+        else localStorage.removeItem(k);
+      }
+    } catch (e) { /* storage unavailable */ }
+    return open;
+  }
+  function markOpen() { try { localStorage.setItem(OPEN_KEY + pageId, String(Date.now())); } catch (e) { /* storage unavailable */ } }
+  // Lists this page as open. Returns true for a new tab with no other page open: the last tab with
+  // the saved giveaway was closed, so it is to be deleted. A reload or Back is the same tab even
+  // without the note (a tab opened before this version had none).
+  function joinTabs() {
+    var known = false;
+    try { known = !!sessionStorage.getItem(TAB_KEY); } catch (e) { /* blocked: every load is a new tab */ }
+    try {
+      var nav = performance.getEntriesByType('navigation')[0];
+      if (nav && (nav.type === 'reload' || nav.type === 'back_forward')) known = true;
+    } catch (e) { /* older browser */ }
+    pageId = uid();
+    try { sessionStorage.setItem(TAB_KEY, '1'); } catch (e) { /* blocked */ }
+    var last = !known && !otherTabsOpen();
+    markOpen();
+    setInterval(markOpen, 30000);
+    window.addEventListener('pagehide', function () { try { localStorage.removeItem(OPEN_KEY + pageId); } catch (e) { /* storage unavailable */ } });
+    window.addEventListener('pageshow', function (e) { if (e.persisted) markOpen(); });
+    return last;
+  }
+  // Deletes the saved giveaway: lists, rules, prizes, winners, log, avatars and the IndexedDB copy.
+  function wipeSaved() {
+    try {
+      var raw = localStorage.getItem(STORE_KEY) || '';
+      var sum = JSON.parse(localStorage.getItem(SUMMARY_KEY) || 'null');
+      if (sum && !sum.sample && sum.people > 0) localStorage.setItem(USED_KEY, '1');
+      localStorage.removeItem(STORE_KEY);
+      localStorage.removeItem(SUMMARY_KEY);
+      if (raw.length < 200 && raw.indexOf('"big"') !== -1) bigWrite(null).catch(function () {});
+    } catch (e) { /* storage unavailable */ }
+    avClear();
   }
   function showSaveProblem(on) { $('#save-banner').hidden = !on; }
   var saveTimer = null;
@@ -1622,6 +1683,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     }
     try {
       var ev = lastEv || evaluate();
+      if (!state.sample && ev.people.length) localStorage.setItem(USED_KEY, '1');
       localStorage.setItem(SUMMARY_KEY, JSON.stringify({
         at: Date.now(), sample: !!state.sample, people: ev.people.length, eligible: ev.eligibleCount,
         drawn: state.winners.filter(function (w) { return !w.void; }).length, total: totalQty()
@@ -1646,19 +1708,33 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     renderAll();
     avLoad().then(function () { renderAll(); });
   }
-  // The giveaway is open in another tab too: when that tab saves, take its data, so this tab
-  // never writes older data over it. During a draw this tab's result is saved next and wins.
-  window.addEventListener('storage', function (e) {
-    if (e.storageArea !== localStorage || (e.key !== STORE_KEY && e.key !== null)) return;
+  // Takes the giveaway as saved now (raw: its JSON, null once deleted). During a draw this tab's
+  // result is saved next and wins.
+  function takeSaved(raw) {
     if (busy) return;
     var s = null;
-    try { s = e.key === null ? null : JSON.parse(e.newValue || 'null'); } catch (err) { /* unreadable: start empty */ }
+    try { s = JSON.parse(raw || 'null'); } catch (err) { /* unreadable: start empty */ }
     if (s && s.v === 1 && s.big) {
       bigRead().then(function (next) { if (next && !busy) { inBig = true; useState(next); } });
       return;
     }
     inBig = false;
     useState(s && s.v === 1 ? normalizeState(s) : makeEmpty());
+  }
+  // The giveaway is open in another tab too: when that tab saves, take its data, so this tab
+  // never writes older data over it.
+  window.addEventListener('storage', function (e) {
+    if (e.storageArea !== localStorage || (e.key !== STORE_KEY && e.key !== null)) return;
+    takeSaved(e.key === null ? null : e.newValue);
+  });
+  // Back from the back-forward cache: meanwhile another tab may have changed the giveaway, or deleted
+  // it (關掉分頁就清除), and this page did not hear of it. Take what is saved now.
+  window.addEventListener('pageshow', function (e) {
+    if (!e.persisted) return;
+    var raw;
+    try { raw = localStorage.getItem(STORE_KEY); } catch (err) { return; }
+    if (raw === null && state && state.sample) return;  // the sample is only saved once it is changed
+    takeSaved(raw);
   });
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden' && saveTimer) flush(); });
   function addLog(kind, text) {
@@ -3040,6 +3116,8 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     window.addEventListener('hashchange', function () { takeReceiveHash(); showView(true); });
   }
 
+  // The last tab with the saved giveaway was closed: start over
+  if (joinTabs()) wipeSaved();
   state = load();
   if (!state) {
     // A big giveaway saved in IndexedDB: cover the page until it is read
