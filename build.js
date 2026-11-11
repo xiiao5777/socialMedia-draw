@@ -23,11 +23,17 @@ if (drawVersion !== version) {
 }
 if (src.split("'__DRAW_URL__'").length !== 2) throw new Error('src/collector.js: expected one __DRAW_URL__ placeholder');
 
+// Chinese text becomes \uXXXX escapes (6 characters each, instead of 9 once percent-encoded).
 const code = esbuild.transformSync(src.replace("'__DRAW_URL__'", JSON.stringify(SITE_URL + 'draw.html')), {
-  minify: true, target: 'es2017', charset: 'utf8', legalComments: 'none'
+  minify: true, target: 'es2017', charset: 'ascii', legalComments: 'none'
 }).code.trim().replace(/;$/, '');
-const bookmarklet = 'javascript:' + encodeURIComponent('void ' + code + ';');
-if (/["<>&]/.test(bookmarklet)) throw new Error('bookmarklet has characters unsafe for an HTML attribute');
+// The browser percent-decodes a javascript: address before running it, so only what the address or
+// the HTML attribute cannot hold as it is gets encoded: %, quotes, <, >, &, #, spaces and non-ASCII
+// (some is left in regular expressions). Brackets, = and the like stay as they are, which keeps the
+// bookmark well under Firefox's limit.
+const bookmarklet = 'javascript:' + ('void ' + code + ';').replace(/[%"<>&#\s]|[^\x00-\x7F]/gu, (c) => encodeURIComponent(c));
+if (/["<>&\s]/.test(bookmarklet)) throw new Error('bookmarklet has characters unsafe for an HTML attribute');
+if (decodeURIComponent(bookmarklet.slice('javascript:'.length)) !== 'void ' + code + ';') throw new Error('bookmarklet does not decode back to the code');
 // Firefox stops accepting bookmark addresses around 64K characters.
 if (bookmarklet.length > 64000) throw new Error('bookmarklet is ' + bookmarklet.length + ' characters, over the 64K limit');
 

@@ -1,11 +1,12 @@
 // Draw page with real-world lists: people who share a name, CSV files saved by Excel in Big5 / GBK,
-// and a giveaway too big for localStorage (kept in IndexedDB instead, or a warning when it can't be kept).
-const { SITE, launch, serveSite, check, done, pasteInto } = require('./helpers');
+// a giveaway too big for localStorage (kept in IndexedDB instead, or a warning when it can't be kept),
+// and the page opened by 送到抽獎系統 when no list arrives.
+const { SITE, launch, serveSite, check, done, pasteInto, version } = require('./helpers');
 
 const url = SITE + 'draw.html';
 const txt = (page, s) => page.$eval(s, n => n.textContent);
 function result(kind, items, extra) {
-  return JSON.stringify(Object.assign({ giveaway: 'list', v: 1, tool: '1.3', platform: 'facebook', kind, page: 'https://www.facebook.com/p/1', at: kind + Math.random(), items }, extra || {}));
+  return JSON.stringify(Object.assign({ giveaway: 'list', v: 1, tool: version(), platform: 'facebook', kind, page: 'https://www.facebook.com/p/1', at: kind + Math.random(), items }, extra || {}));
 }
 // Bytes of a text in an encoding Excel uses on Chinese Windows (Node has no Big5 / GBK encoder)
 const BIG5 = { '名字': 'a657a672', '留言': 'af64a8a5', '陳小明': 'b3afa470a9fa', '林雅婷': 'aa4cb6aeb440', '我要抽': 'a7daad6ea9e2', '好想要': 'a66eb751ad6e' };
@@ -163,6 +164,22 @@ function bigList(n) {
   await p2.waitForTimeout(500);
   check(await p2.isHidden('#save-banner'), 'the warning goes away once the giveaway fits again');
   await ctx2.close();
+
+  // ---------- Opened by 送到抽獎系統, but no list comes ----------
+  const ctx3 = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await serveSite(ctx3);
+  const p3 = await ctx3.newPage();
+  watch(p3, 'receive');
+  await p3.clock.install();
+  await p3.goto(url + '#receive');
+  await p3.waitForTimeout(300);
+  check(p3.url() === url && await p3.isVisible('#recv-banner') && await txt(p3, '#recv-title') === '正在接收抓取工具送來的名單…', '#receive: says a list is on its way, and the address drops #receive (' + p3.url() + ')');
+  await p3.clock.fastForward(21000);
+  check(await txt(p3, '#recv-title') === '沒有收到名單。' && (await txt(p3, '#recv-text')).includes('按抓取工具上的「複製結果」'), '#receive: when nothing comes, says to copy and paste instead');
+  await pasteInto(p3, '#paste', result('comment', [{ name: 'A', handle: 'fb:1', text: '我要抽' }]));
+  await p3.click('#btn-add');
+  check(await p3.isHidden('#recv-banner') && await txt(p3, '#s-people') === '1', 'a pasted list clears that note');
+  await ctx3.close();
 
   check(!errors.length, 'no page errors ' + JSON.stringify(errors));
   await browser.close();

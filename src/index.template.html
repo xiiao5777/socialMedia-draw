@@ -156,6 +156,11 @@ a { color: var(--accent-text); }
 .facts li { display: flex; gap: 8px; align-items: baseline; }
 .facts li::before { content: "✓"; color: var(--ok); font-weight: 700; flex: none; }
 .meta { font-size: 13.5px; color: var(--muted); }
+/* Phones and tablets: the 抓取工具 needs a computer, so say so first, with the address to send over */
+.phone-note { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border-radius: 10px; background: var(--accent-soft); border-left: 4px solid var(--accent); }
+.phone-note b { color: var(--accent-text); }
+.phone-url { font-family: var(--font-mono); font-size: 13.5px; overflow-wrap: anywhere; padding: 6px 10px; border-radius: 6px; background: var(--surface); user-select: all; -webkit-user-select: all; }
+.phone-note .note { color: var(--muted); }
 
 /* Hero illustration: a winning raffle ticket, the same one the draw page stamps */
 .hero-art { display: flex; flex-direction: column; align-items: center; gap: 14px; min-width: 0; }
@@ -418,6 +423,15 @@ details.more-code[open] summary { margin-bottom: 8px; }
   <main class="content">
     <section class="hero" aria-labelledby="h-hero">
       <div class="hero-text">
+        <div class="phone-note" id="phone-note" role="note" hidden>
+          <p><b>抓名單要用電腦。</b>抓取工具要裝在電腦的 Chrome、Edge、Safari 或 Firefox 上，手機和平板不能用。請把這個網址傳到電腦，再用電腦打開：</p>
+          <p class="phone-url" id="phone-url">__SITE_URL__</p>
+          <div class="row">
+            <button class="btn btn-primary btn-sm" type="button" id="btn-copy-url">複製網址</button>
+            <button class="btn btn-sm" type="button" id="btn-share-url" hidden>傳給自己（LINE、Email…）</button>
+          </div>
+          <p class="note">抽獎頁用手機也打得開，但手機和電腦的抽獎資料不會互通，抓名單和抽獎請都在同一台電腦上做。</p>
+        </div>
         <p class="kicker">FACEBOOK・X・THREADS</p>
         <h1 id="h-hero">貼文抽獎，<br>三步驟搞定</h1>
         <p class="lede">抓下貼文的留言、按讚和分享名單，設定參加條件和獎品，公平地隨機抽出得獎者。免費、不用登入，名單只存在你自己的瀏覽器。</p>
@@ -466,13 +480,13 @@ details.more-code[open] summary { margin-bottom: 8px; }
         <div class="step-card">
           <span class="num">2</span>
           <h3>到貼文抓名單</h3>
-          <p>打開 Facebook、X 或 Threads 的貼文，按書籤列的「抓取抽獎名單」，跑完按「複製結果」。按讚和分享的人也用同一個工具抓。</p>
+          <p>打開 Facebook、X 或 Threads 的貼文，按書籤列的「抓取抽獎名單」，跑完按「送到抽獎系統」。按讚和分享的人也用同一個工具抓。</p>
           <a class="more" href="#use">看各平台怎麼抓 ↓</a>
         </div>
         <div class="step-card">
           <span class="num">3</span>
-          <h3>貼上，設定，抽獎</h3>
-          <p>到抽獎系統的「準備」頁貼上名單，設定參加條件和獎品，再到「抽獎」頁按「抽出 1 位」。</p>
+          <h3>設定條件和獎品，抽獎</h3>
+          <p>送過來的名單會出現在抽獎系統的「準備」頁。設定參加條件和獎品，再到「抽獎」頁按「抽出 1 位」。</p>
           <a class="more" href="draw.html">開始抽獎 →</a>
         </div>
       </div>
@@ -487,9 +501,9 @@ details.more-code[open] summary { margin-bottom: 8px; }
       <div class="update" id="whats-new" role="note">
         <h3>v__VERSION__ 更新了</h3>
         <ul>
-          <li>抓按讚和分享更簡單：抓完留言後，直接在工具上按「按讚」或「分享」，再點開那份名單，工具就會自動開始抓，不用再找書籤。</li>
-          <li>複製完會告訴你還有哪幾份名單沒抓，三份都抓好了會提醒你去設定參加條件。</li>
-          <li>修正：沒打開名單就按「按讚」時，舊版會把頁面上留言的人當成按讚的人。新版會等你打開名單才開始抓。</li>
+          <li>不用再複製、貼上：抓完按「送到抽獎系統」，名單會直接加進抽獎系統。抽獎已經開始的話，抽獎系統會提醒你，不會加進去。</li>
+          <li>抓完會自動停：工具會對照貼文上顯示的留言數或按讚數，抓到一樣多就停，畫面上會顯示「230 / 256」這樣的進度。</li>
+          <li>沒抓完會提醒：抓到的比貼文上的少，或你按了「停止」，按「繼續抓」就能接著抓，已經抓到的會留著，送過去的名單也會跟著更新。</li>
         </ul>
         <p><b>已經裝過舊版的話：</b>在書籤列的「抓取抽獎名單」上按右鍵，選「刪除」，再用下面的方法一重新拖一次。打開工具時，標題旁邊顯示「v__VERSION__」就是新版。</p>
       </div>
@@ -574,14 +588,14 @@ details.more-code[open] summary { margin-bottom: 8px; }
     <section class="section" id="use" aria-labelledby="h-use">
       <div class="sec-head">
         <h2 id="h-use">使用教學</h2>
-        <p>工具一次抓一份名單。留言、按讚、分享各抓一次，每抓完一份就按「複製結果」，到抽獎系統第 1 步貼上，按「加入名單」。同一個人在不同名單裡會自動合併成一位。</p>
+        <p>工具一次抓一份名單。留言、按讚、分享各抓一次，每抓完一份就按「送到抽獎系統」，名單會直接加進抽獎系統的第 1 步。同一個人在不同名單裡會自動合併成一位。</p>
       </div>
       <div class="card combo" id="combo">
         <h3>想抽「留言＋按讚＋分享」都做到的人？</h3>
         <ol class="steps">
-          <li><p><b>抓留言：</b>打開貼文，按書籤列的「抓取抽獎名單」。跑完按「複製結果」，貼到抽獎系統第 1 步，按「加入名單」。</p></li>
-          <li><p><b>抓按讚：</b>回到貼文，在工具上按「按讚」，再點開貼文的按讚名單，工具會自動開始抓。跑完一樣複製、貼上、加入名單。</p></li>
-          <li><p><b>抓分享：</b>關掉按讚名單，在工具上按「分享」，再點開分享名單。跑完一樣複製、貼上、加入名單。</p></li>
+          <li><p><b>抓留言：</b>打開貼文，按書籤列的「抓取抽獎名單」。跑完按「送到抽獎系統」，抽獎系統會在新分頁打開，留言名單已經加進去了。</p></li>
+          <li><p><b>抓按讚：</b>回到貼文的分頁，在工具上按「按讚」，再點開貼文的按讚名單，工具會自動開始抓。跑完一樣按「送到抽獎系統」。</p></li>
+          <li><p><b>抓分享：</b>關掉按讚名單，在工具上按「分享」，再點開分享名單。跑完一樣按「送到抽獎系統」。</p></li>
           <li><p><b>設條件：</b>到抽獎系統第 2 步「參加條件」，勾選「需要留言」「需要按讚」「需要分享」。只有三樣都做到的人會被抽到。</p></li>
         </ol>
         <p class="note">工具已經關掉的話，也可以先點開按讚或分享的名單，再按書籤列的「抓取抽獎名單」，工具會自己認出是哪一種名單。</p>
@@ -594,13 +608,13 @@ details.more-code[open] summary { margin-bottom: 8px; }
           <ol class="steps">
             <li><p>打開那一則貼文。在動態上的話，先點貼文上的時間，進到單一貼文。</p></li>
             <li><p>按書籤列的「抓取抽獎名單」。工具會把排序改成「所有留言」，並自動展開全部留言和回覆。</p></li>
-            <li><p>跑完後按「複製結果」。</p></li>
+            <li><p>跑完後按「送到抽獎系統」。</p></li>
           </ol>
           <p class="sub-h">按讚和分享</p>
           <ol class="steps">
             <li><p>在工具上按「按讚」或「分享」。</p></li>
             <li><p>點貼文下方表情符號旁邊的數字（分享就點「N 次分享」），跳出名單視窗後，工具會自動開始抓。</p></li>
-            <li><p>跑完後按「複製結果」。分享名單只列得出你看得到的分享，抽獎文可以請大家分享時設為公開。</p></li>
+            <li><p>跑完後按「送到抽獎系統」。分享名單只列得出你看得到的分享，抽獎文可以請大家分享時設為公開。</p></li>
           </ol>
         </div>
         <div class="card">
@@ -609,13 +623,13 @@ details.more-code[open] summary { margin-bottom: 8px; }
           <ol class="steps">
             <li><p>點進那一則貼文，網址會有 <code>/status/</code>。</p></li>
             <li><p>按書籤，工具會往下捲動讀取所有回覆。你自己的回覆會自動略過。</p></li>
-            <li><p>跑完後按「複製結果」。</p></li>
+            <li><p>跑完後按「送到抽獎系統」。</p></li>
           </ol>
           <p class="sub-h">按讚、轉發、引用</p>
           <ol class="steps">
             <li><p>在工具上按「按讚」。轉發和引用請按「分享」。</p></li>
             <li><p>點貼文的按讚數或轉發數，打開名單頁（網址結尾是 <code>/likes</code>、<code>/retweets</code> 或 <code>/quotes</code>），工具會自動開始抓。</p></li>
-            <li><p>跑完後按「複製結果」。X 只讓貼文作者看到按讚名單。</p></li>
+            <li><p>跑完後按「送到抽獎系統」。X 只讓貼文作者看到按讚名單。</p></li>
           </ol>
         </div>
         <div class="card">
@@ -624,13 +638,13 @@ details.more-code[open] summary { margin-bottom: 8px; }
           <ol class="steps">
             <li><p>點進那一則貼文，網址會有 <code>/post/</code>。</p></li>
             <li><p>按書籤，工具會往下捲動讀取所有回覆。你自己的回覆會自動略過。</p></li>
-            <li><p>跑完後按「複製結果」。</p></li>
+            <li><p>跑完後按「送到抽獎系統」。</p></li>
           </ol>
           <p class="sub-h">按讚和轉發</p>
           <ol class="steps">
             <li><p>在工具上按「按讚」。轉發請按「分享」。</p></li>
             <li><p>點貼文下方的讚數或「動態」，跳出名單視窗後，工具會自動開始抓。</p></li>
-            <li><p>跑完後按「複製結果」。</p></li>
+            <li><p>跑完後按「送到抽獎系統」。</p></li>
           </ol>
         </div>
       </div>
@@ -638,7 +652,7 @@ details.more-code[open] summary { margin-bottom: 8px; }
       <div class="card">
         <p class="note">抽獎系統分成兩頁：「準備」頁做第 1～3 步，做好按「下一步：去抽獎」，到「抽獎」頁抽出得獎者。</p>
         <ol class="draw-steps">
-          <li><p><b>匯入參加者</b><span>把複製的結果貼到第 1 步，按「加入名單」。也可以直接貼名字，或匯入 CSV 檔。旁邊的參加者名單會馬上列出每一位。</span></p></li>
+          <li><p><b>匯入參加者</b><span>在抓取工具按「送到抽獎系統」，名單就會出現在第 1 步。也可以把「複製結果」貼到第 1 步，或直接貼名字、匯入 CSV 檔。旁邊的參加者名單會馬上列出每一位。</span></p></li>
           <li><p><b>參加條件</b><span>勾選要留言、按讚、分享、標記幾位好友、包含關鍵字，也能排除小編。參加者名單會標出誰符合資格，也可以一位一位按「排除」。</span></p></li>
           <li><p><b>獎品</b><span>設定每個獎項的名稱和名額。</span></p></li>
           <li><p><b>抽獎台</b><span>在「抽獎」頁按「抽出 1 位」。抽出的人會移出抽獎池，不會重複中獎。可以開全螢幕給大家看。</span></p></li>
@@ -655,13 +669,14 @@ details.more-code[open] summary { margin-bottom: 8px; }
         <details><summary>抽獎資料存在哪裡？</summary><p>存在你這台電腦的瀏覽器裡，不會上傳到任何伺服器。換電腦、換瀏覽器、用無痕視窗或清除瀏覽資料，就看不到之前的抽獎了，抽完記得「下載 CSV 紀錄」或「複製得獎公告」保存。</p></details>
         <details><summary>要辦下一次抽獎怎麼做？</summary><p>抽獎系統一次保存一場抽獎。先把這次的結果下載 CSV 保存，再到得獎名單下面按「清除全部資料」，就能從第 1 步重新開始。</p></details>
         <details><summary>抽獎公平嗎？</summary><p>抽獎用瀏覽器內建的密碼學亂數，每位符合資格的人機會都一樣。同一個人留言很多次也只算一次，抽出的人會移出抽獎池。每次抽出都會記下時間和當時抽獎池人數，CSV 紀錄裡都有。</p></details>
-        <details><summary>抓的時候可以切到別的分頁嗎？</summary><p>請不要。瀏覽器會把背景分頁放慢，工具可能停住或抓不完整。留言很多時要等幾分鐘，跑完會顯示「複製結果」按鈕。</p></details>
+        <details><summary>抓的時候可以切到別的分頁嗎？</summary><p>請不要。瀏覽器會把背景分頁放慢，工具可能停住或抓不完整。留言很多時要等幾分鐘，跑完會顯示「送到抽獎系統」按鈕。</p></details>
         <details><summary>按讚和分享的人要怎麼抓？</summary><p>先照平常抓完留言，然後在工具上按「按讚」或「分享」，再點開貼文的按讚或分享名單，工具會自動開始抓。三份名單都貼到抽獎系統後，在第 2 步勾選要哪些條件。完整步驟在上面的<a href="#combo">使用教學</a>。</p></details>
-        <details><summary>抓到 0 則或數量不對怎麼辦？</summary><p>先確認打開的是單一貼文。抓按讚或分享時，要等名單視窗打開，工具才會開始抓。還是不對的話，按工具上的「複製診斷資訊」，連同哪個平台一起<a href="__REPO_URL__/issues" target="_blank" rel="noopener">回報問題</a>。</p></details>
-        <details><summary>名單會被傳到別的地方嗎？</summary><p>不會。工具只讀你畫面上的內容（頭像會從同一個網站的圖片伺服器再讀一次，用來縮小），結果複製到你自己的剪貼簿，由你貼到抽獎系統，不會傳到其他伺服器。</p></details>
+        <details><summary>按「送到抽獎系統」沒有反應？</summary><p>瀏覽器擋住新分頁的話，工具會改成複製，請打開抽獎系統，在第 1 步貼上，按「加入名單」。有些網站不讓兩個分頁互相傳資料，工具會提醒你，這時請按「複製結果」，再到抽獎系統第 1 步貼上。抽出第一位得獎者之後名單會鎖住，抽獎系統不會再加名單，要加的話請先按「重新開始抽獎」。</p></details>
+        <details><summary>抓到 0 則或數量不對怎麼辦？</summary><p>先確認打開的是單一貼文。工具會對照貼文上顯示的數量，抓到的比較少就會提醒，按「繼續抓」可以接著抓；差幾則通常是已刪除或你看不到的留言。抓按讚或分享時，要等名單視窗打開，工具才會開始抓。還是不對的話，按工具上的「複製診斷資訊」，連同哪個平台一起<a href="__REPO_URL__/issues" target="_blank" rel="noopener">回報問題</a>。</p></details>
+        <details><summary>名單會被傳到別的地方嗎？</summary><p>不會。工具只讀你畫面上的內容（頭像會從同一個網站的圖片伺服器再讀一次，用來縮小）。按「送到抽獎系統」時，名單是在你自己的瀏覽器裡，從貼文的分頁直接交給抽獎系統的分頁；按「複製結果」則是放到你的剪貼簿。兩種都不會傳到其他伺服器。</p></details>
         <details><summary>有些頭像沒抓到？</summary><p>有的網站不讓其他網頁讀取圖片。抓不到的人，在抽獎系統會用名字的第一個字代替，不影響抽獎。工具跑完會顯示「頭像 幾 / 幾 張」。</p></details>
         <details><summary>手機可以用嗎？</summary><p>抓取工具要在電腦的瀏覽器上用。抽獎頁手機也打得開，但資料存在各自的瀏覽器裡，電腦上的抽獎不會出現在手機上。</p></details>
-        <details><summary>怎麼知道工具有沒有更新？</summary><p>工具面板的標題旁邊會顯示版本（現在最新是 v__VERSION__）。把抓取結果貼到抽獎系統時，如果用的是舊版，抽獎系統會跳出提醒，告訴你怎麼更新。</p></details>
+        <details><summary>怎麼知道工具有沒有更新？</summary><p>工具面板的標題旁邊會顯示版本（現在最新是 v__VERSION__）。名單加進抽獎系統時（送過去或貼上都一樣），如果是用舊版抓的，抽獎系統會跳出提醒，告訴你怎麼更新。</p></details>
         <details><summary>Facebook、X 或 Threads 改版後不能用了？</summary><p>請<a href="__REPO_URL__/issues" target="_blank" rel="noopener">回報問題</a>，修好後會更新工具。更新後要刪掉舊的「抓取抽獎名單」書籤，再照上面的步驟裝一次。</p></details>
       </div>
     </section>
@@ -711,6 +726,36 @@ details.more-code[open] summary { margin-bottom: 8px; }
   showResume();
   window.addEventListener('storage', function (e) { if (e.key === SUMMARY_KEY || e.key === null) showResume(); });
   window.addEventListener('pageshow', function (e) { if (e.persisted) showResume(); });
+
+  // Phones and tablets (a touch screen without a mouse) cannot use the bookmark
+  var touchOnly = false;
+  try { touchOnly = window.matchMedia('(hover: none) and (pointer: coarse)').matches; } catch (e) { /* old browser */ }
+  if (touchOnly) {
+    var siteUrl = document.getElementById('phone-url').textContent;
+    document.getElementById('phone-note').hidden = false;
+    document.getElementById('btn-copy-url').addEventListener('click', function () {
+      function fallback() {
+        var r = document.createRange();
+        r.selectNodeContents(document.getElementById('phone-url'));
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(r);
+        toast('已選取網址，請長按網址，選「拷貝」或「複製」。');
+      }
+      try {
+        var p = navigator.clipboard && navigator.clipboard.writeText(siteUrl);
+        if (!p) { fallback(); return; }
+        p.then(function () { toast('已複製網址，傳到電腦（例如用 LINE 或 Email 傳給自己）再打開。'); }, fallback);
+      } catch (e) { fallback(); }
+    });
+    var share = document.getElementById('btn-share-url');
+    if (navigator.share) {
+      share.hidden = false;
+      share.addEventListener('click', function () {
+        navigator.share({ title: '抽獎系統', text: '抽獎系統：用電腦打開，安裝抓取工具', url: siteUrl }).catch(function () { /* closed */ });
+      });
+    }
+  }
 
   var link = document.getElementById('bookmarklet');
   var code = link.getAttribute('href');

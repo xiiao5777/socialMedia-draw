@@ -5,12 +5,13 @@ const path = require('path');
 const mocks = require('./mocks.js');
 const { colorOf, serveImage } = require('./avatars-mock.js');
 const { SITE, OUT, launch, serveSiteFile, serveNoFonts, bookmarklet, version, check, done, pasteInto } = require('./helpers.js');
-const code = bookmarklet().code;
+const BM = bookmarklet();
+const code = BM.code;
 const VER = version();
 
-async function runOn(browser, url, opts = {}) {
+// A browser with the simulated sites and the Pages site.
+async function newCtx(browser, imgLog = []) {
   const ctx = await browser.newContext({ viewport: { width: 1200, height: 720 } });
-  const imgLog = [];
   await ctx.route('**/*', (route) => {
     if (serveImage(route, imgLog)) return;
     if (serveSiteFile(route) || serveNoFonts(route)) return;
@@ -19,13 +20,23 @@ async function runOn(browser, url, opts = {}) {
     if (!key) return route.fulfill({ status: 404, body: '' });
     route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: mocks[key]() });
   });
+  return ctx;
+}
+
+// opts.viaLink: run the bookmark address itself, as a click on the bookmarks bar does.
+async function runOn(browser, url, opts = {}) {
+  const imgLog = [];
+  const ctx = await newCtx(browser, imgLog);
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   await page.goto(url);
   await page.waitForTimeout(200);
   if (opts.before) { await opts.before(page); await page.waitForTimeout(400); }
-  await page.evaluate(code);
+  const t0 = Date.now();
+  if (opts.viaLink) {
+    await page.evaluate((href) => { const a = document.createElement('a'); a.href = href; a.textContent = '抓取抽獎名單'; document.body.prepend(a); a.click(); a.remove(); }, BM.href);
+  } else await page.evaluate(code);
   let result = null, raw = '';
   if (!opts.noWait) {
     try {
@@ -36,8 +47,9 @@ async function runOn(browser, url, opts = {}) {
   } else {
     await page.waitForTimeout(800);
   }
+  const ms = Date.now() - t0;
   const panelText = await panel(page);
-  return { ctx, page, result, raw, errors, panelText, imgLog };
+  return { ctx, page, result, raw, errors, panelText, imgLog, ms };
 }
 const panel = (page) => page.evaluate(() => document.getElementById('giveaway-collector-host')?.shadowRoot?.textContent || '');
 const btn = (page, text) => page.locator('#giveaway-collector-host button', { hasText: text });
@@ -49,7 +61,18 @@ async function nextResult(page, prev) {
   const raw = await page.evaluate(() => window.__giveawayResult);
   return { raw, result: JSON.parse(raw) };
 }
-const copyNow = async (page) => { await btn(page, /複製結果|已複製|再複製一次/).first().click(); await page.waitForTimeout(300); };
+const copyNow = async (page) => { await page.bringToFront(); await btn(page, /複製結果|已複製|再複製一次/).first().click(); await page.waitForTimeout(300); };
+// The panel's big number and what follows it, e.g. "22/ 22 則留言"
+const countLine = (page) => page.evaluate(() => { const n = document.getElementById('giveaway-collector-host').shadowRoot.querySelector('span[style*="tabular-nums"]'); return n.textContent + n.nextSibling.textContent; });
+const hasGoOn = async (page) => await btn(page, /^繼續抓$/).count() === 1;
+// 送到抽獎系統, then the panel's answer once the draw page has replied
+async function sendNow(page) {
+  await page.bringToFront();
+  await btn(page, '送到抽獎系統').click();
+  await page.waitForFunction(() => /已送到抽獎系統|沒辦法直接送過去|鎖住|讀不懂|正在抽獎/.test(document.getElementById('giveaway-collector-host').shadowRoot.textContent), null, { timeout: 20000, polling: 200 }).catch(() => {});
+  return panel(page);
+}
+const draws = (ctx) => ctx.pages().filter(p => p.url().startsWith(SITE + 'draw.html'));
 
 // Centre colour of an avatar thumbnail, compared with the colour the simulated CDN served.
 async function avatarMatches(page, dataUrl, srcUrl) {
@@ -98,6 +121,9 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   check(await avatarMatches(r.page, av['fb:100045'], 'https://scontent.xx.fbcdn.net/v/t39.30808-1/profile_php_id_100045_n.jpg'), 'FB: profile.php person has the right avatar');
   check(!r.imgLog.some(l => l.cors && /photo_777|emoji\.php/.test(l.url)), 'FB: the collector never fetched the photo or the emoji');
   check(/頭像 20 \/ 21 張/.test(r.panelText), 'FB: panel reports avatars 20 / 21');
+  check(await countLine(r.page) === '22/ 22 則留言' && !await hasGoOn(r.page), 'FB: reads 「22 則留言」 on the post and shows 22 / 22, nothing left to 繼續抓 (' + await countLine(r.page) + ')');
+  const mainBtn = await r.page.evaluate(() => { const b = document.getElementById('giveaway-collector-host').shadowRoot.querySelector('button[style*="rgb(198, 43, 43)"]'); return b && b.textContent; });
+  check(mainBtn === '送到抽獎系統', 'FB: 送到抽獎系統 is the main (red) button (' + mainBtn + ')');
   console.log('     FB result size', r.raw.length, 'chars');
   // copy button -> clipboard, then the green confirmation
   check(/複製結果|已複製/.test(r.panelText), 'FB: panel offers copy');
@@ -152,6 +178,7 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   check(Object.keys(fbl).length === 35, 'FB reactions: 35 avatars (got ' + Object.keys(fbl).length + ')');
   check(await avatarMatches(r.page, fbl['fb:liker.1'], 'https://scontent.xx.fbcdn.net/v/t39.30808-1/liker_1_n.jpg'), 'FB reactions: avatar from the <image> next to the name, not the reaction badge');
   check(r.result && r.result.items.every(i => i.url && !i.link), 'FB reactions: profile links, no comment links');
+  check(await countLine(r.page) === '35/ 35 位按讚的人', 'FB reactions: reads 「全部 35」 from the list (' + await countLine(r.page) + ')');
   fs.writeFileSync(path.join(OUT, 'sample-fb-likes.json'), r.raw);
   await r.ctx.close();
 
@@ -159,6 +186,7 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   r = await runOn(browser, 'https://www.facebook.com/brandpage/posts/pfbid0shares');
   check(r.result && r.result.kind === 'share' && r.result.items.length === 6, 'FB shares: 6 sharers, tagged friends ignored (got ' + (r.result && r.result.items.length) + ')');
   check(r.result && !r.result.avatars && /頭像 0 \/ 6 張/.test(r.panelText), 'FB shares: no avatars, reported as 0 / 6');
+  check(await hasGoOn(r.page) && /比貼文上的數量少？/.test(r.panelText), 'FB shares: no number to compare, 繼續抓 offered');
   await r.ctx.close();
 
   // X post with virtualized replies, owner reply, parent tweet, "Show more replies"
@@ -170,6 +198,7 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   check(u0 && u0.name === 'User 0' && u0.tags && u0.tags.join() === '@friend_0,@friend_1', 'X: name, handle and mention tags (' + JSON.stringify(u0) + ')');
   check(u0 && u0.url === 'https://x.com/user_0' && u0.link === 'https://x.com/user_0/status/1000', 'X: profile link and reply link');
   check(/略過貼文作者/.test(r.panelText), 'X: panel reports skipped owner replies');
+  check(await countLine(r.page) === '33/ 33 則留言' && !await hasGoOn(r.page), 'X: reads "34 replies" from the post, less the author\'s own, 33 / 33 (' + await countLine(r.page) + ')');
   const xav = (x && x.avatars) || {};
   check(Object.keys(xav).length === 33 && !xav['@brand'], 'X: 33 avatars, none for the owner (got ' + Object.keys(xav).length + ')');
   check(r.imgLog.some(l => l.cors && /user_0_bigger\.jpg$/.test(l.url)), 'X: asks for the sharper *_bigger avatar');
@@ -183,6 +212,7 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   check(r.result && r.result.kind === 'like' && r.result.items.length === 25, 'X likes: 25 likers (got ' + (r.result && r.result.items.length) + ')');
   check(r.result && r.result.items.every(i => /^Liker \d+$/.test(i.name) && /^@liker_\d+$/.test(i.handle)), 'X likes: bio mentions and sidebar ignored');
   check(r.result && Object.keys(r.result.avatars || {}).length === 25, 'X likes: 25 avatars');
+  check(await countLine(r.page) === '25位按讚的人' && /比貼文上的數量少？/.test(await panel(r.page)) && await hasGoOn(r.page), 'X likes: no number on the list page, so 繼續抓 is offered in case');
   await r.ctx.close();
 
   // Threads post
@@ -193,6 +223,7 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   check(t0i && t0i.text === '我要抽 @pal_0 @pal_2' && t0i.tags && t0i.tags.length === 2, 'Threads: text and tags (' + JSON.stringify(t0i) + ')');
   check(t0i && t0i.url === 'https://www.threads.com/@th.user0' && t0i.link === 'https://www.threads.com/@th.user0/post/R0', 'Threads: profile link and reply link');
   check(th && !th.items.some(i => i.handle === '@brandtw'), 'Threads: main post and owner reply skipped');
+  check(await countLine(r.page) === '16/ 16 則留言' && !await hasGoOn(r.page), 'Threads: reads the number next to the reply icon, 16 / 16 (' + await countLine(r.page) + ')');
   const tav = (th && th.avatars) || {};
   check(Object.keys(tav).length === 16 && await avatarMatches(r.page, tav['@th.user5'], 'https://scontent-tpe1-1.cdninstagram.com/v/t51.2885-19/th.user5_n.jpg'), 'Threads: 16 avatars, th.user5 correct');
   fs.writeFileSync(path.join(OUT, 'sample-threads.json'), r.raw);
@@ -202,6 +233,7 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   r = await runOn(browser, 'https://www.threads.com/@brandtw/post/DAbc123/likes');
   check(r.result && r.result.kind === 'like' && r.result.items.length === 12, 'Threads likes: 12 likers (got ' + (r.result && r.result.items.length) + ')');
   check(r.result && !r.result.avatars && /頭像 0 \/ 12 張/.test(r.panelText) && /有些頭像抓不到/.test(r.panelText), 'Threads likes: avatars blocked, panel explains the letter fallback');
+  check(await countLine(r.page) === '12/ 12 位按讚的人', 'Threads likes: the post\'s like number behind the list, 12 / 12 (' + await countLine(r.page) + ')');
   await r.ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'https://www.threads.com' });
   await btn(r.page, '複製診斷資訊').click();
   await r.page.waitForTimeout(300);
@@ -215,9 +247,23 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   // Guided flow (v1.3): comments first, then 按讚 / 分享 pressed on the panel before the list is open.
   r = await runOn(browser, 'https://www.facebook.com/brandpage/posts/pfbid0flow');
   check(r.result && r.result.kind === 'comment' && r.result.items.length === 4, 'Flow FB: 4 comments first (got ' + (r.result && r.result.items.length) + ')');
+  check(await countLine(r.page) === '4/ 4 則留言', 'Flow FB: 4 / 4 comments');
+  // 送到抽獎系統: the draw page opens in a new tab and takes the list
+  let [drawTab] = await Promise.all([r.ctx.waitForEvent('page'), sendNow(r.page)]);
+  drawTab.on('pageerror', e => r.errors.push('draw: ' + e.message));
+  await drawTab.waitForTimeout(300);
+  let ft = await panel(r.page);
+  check(ft.includes('✓ 已送到抽獎系統：加入 4 則留言（含 3 張頭像）。') && /還要抓按讚或分享的人/.test(ft) && await btn(r.page, '✓ 已送出').count() === 1,
+    'Send FB: 送到抽獎系統 adds the comments, the panel says so and offers 抓按讚 / 抓分享');
+  const dtxt = (s) => drawTab.$eval(s, n => n.textContent.trim());
+  check(drawTab.url() === SITE + 'draw.html' && await dtxt('#s-people') === '4' && await drawTab.locator('#batches .batch').count() === 1 && await drawTab.isHidden('#sample-banner'),
+    'Send FB: the draw page has the 4 people in place of the sample, and its address lost #receive (' + drawTab.url() + ')');
+  check(await drawTab.isVisible('#recv-banner') && (await dtxt('#recv-banner')).startsWith('已收到 Facebook 的留言名單：加入 4 則留言') && (await dtxt('#recv-banner')).includes('回到貼文的分頁'),
+    'Send FB: the draw page says what it got and how to add the likes (' + (await dtxt('#recv-title')) + ')');
+  await drawTab.screenshot({ path: path.join(OUT, 'shot-send-draw.png'), clip: { x: 0, y: 0, width: 1200, height: 420 } });
   await r.ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'https://www.facebook.com' });
   await copyNow(r.page);
-  let ft = await panel(r.page);
+  ft = await panel(r.page);
   check(/還要抓按讚或分享的人/.test(ft) && await btn(r.page, '抓按讚').count() === 1 && await btn(r.page, '抓分享').count() === 1, 'Flow FB: after copying, the panel offers 抓按讚 and 抓分享');
   const shotPanel = (name) => r.page.locator('#giveaway-collector-host').screenshot({ path: path.join(OUT, name) });
   await shotPanel('shot-flow-1-next.png');
@@ -233,6 +279,21 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   const flNames = fl.result ? fl.result.items.map(i => i.name) : [];
   check(fl.result && fl.result.kind === 'like' && flNames.length === 8 && flNames.includes('陳小明') && !flNames.includes('Jason Tan') && !flNames.includes('品牌粉專'),
     'Flow FB: opening the likes list starts by itself: 8 likers, no commenters who did not like (' + flNames.join(',') + ')');
+  check(await countLine(r.page) === '8/ 8 位按讚的人', 'Flow FB: 8 / 8 likers, from the list\'s 「全部 8」');
+  // The likes go to the same draw tab
+  ft = await sendNow(r.page);
+  await drawTab.waitForTimeout(300);
+  check(ft.includes('✓ 已送到抽獎系統：加入 8 位按讚的人') && draws(r.ctx).length === 1 && await dtxt('#s-people') === '10' && await drawTab.locator('#batches .batch').count() === 2,
+    'Send FB: the likes go to the same draw tab: 2 lists, 10 people (' + (await dtxt('#s-people')) + ', ' + draws(r.ctx).length + ' draw tabs)');
+  // The same list again is not added twice
+  await btn(r.page, '✓ 已送出').click();
+  await r.page.waitForTimeout(1500);
+  check((await panel(r.page)).includes('這份名單之前已經加入過了') && await drawTab.locator('#batches .batch').count() === 2, 'Send FB: sending the same list again adds nothing');
+  // The draw starts: the draw page takes no more lists
+  await drawTab.bringToFront();
+  await drawTab.click('.view-tab[data-view="draw"]');
+  await drawTab.click('#btn-draw');
+  await drawTab.waitForFunction(() => document.getElementById('ticket').dataset.mode === 'won', null, { timeout: 8000 });
   await copyNow(r.page);
   ft = await panel(r.page);
   check(/還要抓分享的人/.test(ft) && await btn(r.page, '抓分享').count() === 1 && await btn(r.page, '抓按讚').count() === 0, 'Flow FB: after the likes, only 抓分享 is left');
@@ -248,6 +309,13 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   await r.page.click('#shares');
   const fs2 = await nextResult(r.page, fl.raw);
   check(fs2.result && fs2.result.kind === 'share' && fs2.result.items.length === 3, 'Flow FB: then the shares list starts by itself: 3 sharers (got ' + (fs2.result && fs2.result.items.length) + ')');
+  check(await countLine(r.page) === '3/ 3 位分享的人', 'Flow FB: 3 / 3 sharers, from the post\'s 「3 次分享」');
+  ft = await sendNow(r.page);
+  await drawTab.waitForTimeout(300);
+  check(/抽獎已經開始，名單鎖住了，所以沒有加入/.test(ft) && !/還要抓/.test(ft) && await drawTab.locator('#batches .batch').count() === 2,
+    'Send FB: once the draw has started, the draw page refuses the shares and the panel says why');
+  check((await dtxt('#recv-banner')).startsWith('沒有加入 Facebook 的分享名單。') && await drawTab.$eval('#recv-banner', b => b.className) === 'banner banner-warn', 'Send FB: the draw page says it did not add them');
+  await r.page.locator('#giveaway-collector-host').screenshot({ path: path.join(OUT, 'shot-send-locked.png') });
   await copyNow(r.page);
   ft = await panel(r.page);
   check(/三份名單都抓好了/.test(ft) && /第 2 步勾選參加條件/.test(ft), 'Flow FB: all three lists done, the panel points to 參加條件');
@@ -290,6 +358,22 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   // X: the likes list is a page of its own; the panel follows the address change
   r = await runOn(browser, 'https://x.com/brand/status/222');
   check(r.result && r.result.kind === 'comment' && r.result.items.length === 3, 'Flow X: 3 replies first (got ' + (r.result && r.result.items.length) + ')');
+  // The browser blocks the new tab: the result is copied instead
+  await r.ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'https://x.com' });
+  await r.page.evaluate(() => { window.__open = window.open; window.open = () => null; });
+  await btn(r.page, '送到抽獎系統').click();
+  await r.page.waitForTimeout(400);
+  check(await r.page.evaluate(() => navigator.clipboard.readText()) === r.raw && (await panel(r.page)).includes('已複製成功'), 'Send X: a blocked pop-up copies the result instead');
+  // The site cuts the new tab off (it looks closed at once): say to copy, and stop offering to send
+  await r.page.evaluate(() => { window.open = () => ({ closed: true, postMessage() {} }); });
+  await btn(r.page, '送到抽獎系統').click();
+  await r.page.waitForTimeout(700);
+  check((await panel(r.page)).includes('沒辦法直接送過去。請按「複製結果」'), 'Send X: a tab the site cuts off: the panel says to use 複製結果');
+  await r.page.evaluate(() => { window.open = window.__open; });
+  await btn(r.page, /^留言$/).click();
+  await r.page.waitForTimeout(300);
+  check(await btn(r.page, '送到抽獎系統').count() === 0 && await btn(r.page, '複製結果').evaluate(b => b.style.backgroundColor) === 'rgb(198, 43, 43)', 'Send X: after that, 複製結果 is the main button');
+  check(await countLine(r.page) === '3/ 3 則留言', 'Flow X: 3 / 3 replies');
   await btn(r.page, /^按讚$/).click();
   await r.page.waitForTimeout(800);
   ft = await panel(r.page);
@@ -297,8 +381,64 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   await r.page.click('#likes-link');
   const xl = await nextResult(r.page, r.raw);
   check(xl.result && xl.result.kind === 'like' && xl.result.items.length === 5 && xl.result.items.every(i => /^@liker_\d$/.test(i.handle)), 'Flow X: the likes page is read by itself: 5 likers, no repliers (got ' + (xl.result && xl.result.items.map(i => i.handle).join(',')) + ')');
+  check(await countLine(r.page) === '5/ 5 位按讚的人', 'Flow X: "5 likes" read on the post is kept for its /likes page (' + await countLine(r.page) + ')');
   check(!r.errors.length, 'Flow X: no page errors ' + JSON.stringify(r.errors));
   await r.ctx.close();
+
+  // The post says 5 and has them at once, over a very long page: the run stops at 5 instead of
+  // scrolling to the end. Run through the bookmark address itself, as the bookmarks bar does.
+  r = await runOn(browser, 'https://www.facebook.com/brandpage/posts/pfbid0count', { viaLink: true });
+  check(BM.href.length < 56000 && !/["<>&\s]/.test(BM.href), 'Bookmark: ' + BM.href.length + ' characters, nothing unsafe for the link');
+  check(r.result && r.result.items.length === 5, 'Bookmark: the javascript: address runs the tool when pressed (got ' + (r.result && r.result.items.length) + ')');
+  check(r.ms < 12000 && await countLine(r.page) === '5/ 5 則留言' && !await hasGoOn(r.page), 'Count: stops as soon as it has the post\'s 5 comments (' + r.ms + ' ms)');
+  check(!r.errors.length, 'Count: no page errors ' + JSON.stringify(r.errors));
+  await r.ctx.close();
+
+  // The post says 12, 8 show: it ends short, says so, and 繼續抓 brings the rest, keeping the 8
+  r = await runOn(browser, 'https://www.facebook.com/brandpage/posts/pfbid0more');
+  let mt = await panel(r.page);
+  check(r.result && r.result.items.length === 8 && await countLine(r.page) === '8/ 12 則留言', 'More: ends at 8 / 12 (' + (r.result && r.result.items.length) + ')');
+  check(mt.includes('貼文上顯示 12 則留言，這次抓到 8。') && /差很多的話，按「繼續抓」可以接著抓/.test(mt) && await hasGoOn(r.page), 'More: says it got fewer than the post shows, with 繼續抓');
+  await r.page.locator('#giveaway-collector-host').screenshot({ path: path.join(OUT, 'shot-collector-short.png') });
+  const [moreTab] = await Promise.all([r.ctx.waitForEvent('page'), sendNow(r.page)]);
+  await moreTab.waitForTimeout(300);
+  check(await moreTab.$eval('#s-comments', n => n.textContent) === '8', 'More: the 8 go to the draw page');
+  await r.page.evaluate(() => window.__unlock());
+  await btn(r.page, /^繼續抓$/).click();
+  const m2 = await nextResult(r.page, r.raw);
+  check(m2.result && m2.result.items.length === 12 && m2.result.at === r.result.at && await countLine(r.page) === '12/ 12 則留言' && !await hasGoOn(r.page),
+    'More: 繼續抓 keeps the 8, adds the other 4 (12 / 12), same list time (' + (m2.result && m2.result.items.length) + ')');
+  mt = await sendNow(r.page);
+  await moreTab.waitForTimeout(300);
+  check(mt.includes('名單更新了，8 → 12 則留言') && await moreTab.locator('#batches .batch').count() === 1 && await moreTab.$eval('#s-comments', n => n.textContent) === '12',
+    'More: sending again replaces the 8 with the 12 in the draw page, not a second list');
+  // 停止 at once: 繼續抓 is offered
+  await btn(r.page, '重新抓取').click();
+  await r.page.waitForTimeout(150);
+  await btn(r.page, '停止').click();
+  await nextResult(r.page, m2.raw);
+  mt = await panel(r.page);
+  check(mt.includes('已經停止。按「繼續抓」可以接著抓') && await hasGoOn(r.page), 'More: after 停止 the panel offers 繼續抓');
+  check(!r.errors.length, 'More: no page errors ' + JSON.stringify(r.errors));
+  await r.ctx.close();
+
+  // Another site cannot hand the draw page a list
+  const ctxE = await newCtx(browser);
+  const evil = await ctxE.newPage();
+  await evil.goto('https://evil.example/');
+  const [evilDraw] = await Promise.all([ctxE.waitForEvent('page'), evil.evaluate((u) => {
+    window.__got = [];
+    addEventListener('message', (e) => window.__got.push(e.data));
+    window.__w = window.open(u + '#receive', 'giveaway-draw');
+  }, SITE + 'draw.html')]);
+  await evilDraw.waitForLoadState();
+  await evilDraw.waitForTimeout(300);
+  const lists0 = await evilDraw.locator('#batches .batch').count();
+  await evil.evaluate((t) => { for (let i = 0; i < 3; i++) { window.__w.postMessage({ giveaway: 'tool', type: 'hello', id: 'e' }, '*'); window.__w.postMessage({ giveaway: 'tool', type: 'send', id: 'e', text: t }, '*'); } }, fs.readFileSync(path.join(OUT, 'sample-fb.json'), 'utf8'));
+  await evil.waitForTimeout(1000);
+  check(await evil.evaluate(() => window.__got.length) === 0 && await evilDraw.locator('#batches .batch').count() === lists0 && await evilDraw.isVisible('#sample-banner'),
+    'Send: the draw page neither answers nor takes a list from another site');
+  await ctxE.close();
 
   // Not a post page / other site
   r = await runOn(browser, 'https://www.facebook.com/', { noWait: true });
