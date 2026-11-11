@@ -57,6 +57,12 @@ const sample = (name) => {
     steps: Array.from(document.querySelectorAll('#demo .demo-steps li')).map(l => l.textContent)
   }));
   check(demo.anims >= 10 && demo.steps.length === 3 && demo.steps[1].includes('往上拖到書籤列'), 'home: drag demo plays (' + demo.anims + ' animations)');
+  const frame = await home.evaluate(() => {
+    const f = document.getElementById('demo'), tag = f.querySelector('.demo-tag');
+    const fr = f.getBoundingClientRect(), tr = tag.getBoundingClientRect();
+    return { border: getComputedStyle(f).borderTopStyle, tag: tag.textContent, onEdge: tr.top < fr.top && tr.bottom > fr.top, visible: tr.width > 0 };
+  });
+  check(frame.border === 'dashed' && frame.tag === '示範動畫・只是示範，不能拖' && frame.onEdge && frame.visible, 'home: the demo sits in a dashed frame labelled 示範動畫 ' + JSON.stringify(frame));
   await home.click('#demo-toggle');
   await home.waitForTimeout(100);
   check(await home.evaluate(() => getComputedStyle(document.querySelector('#demo .d-cursor')).animationPlayState) === 'paused' && await htxt('#demo-toggle') === '播放動畫', 'home: demo can be paused');
