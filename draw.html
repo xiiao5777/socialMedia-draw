@@ -414,6 +414,8 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
 
 .batches { display: flex; flex-direction: column; gap: 6px; }
 .batches-title { font-size: 13px; color: var(--muted); letter-spacing: .06em; }
+.batches-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.batches-head .btn { min-height: 30px; padding: 4px 10px; font-size: 13px; }
 .batch {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -563,6 +565,9 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
   padding: 8px 12px;
 }
 .person + .person { border-top: 1px solid var(--line); }
+.p-side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.p-side .btn { min-height: 26px; padding: 2px 9px; font-size: 12px; color: var(--muted); }
+.p-side .btn:hover { color: var(--ink); }
 .no { font-family: var(--font-mono); font-size: 13px; color: var(--accent-text); font-variant-numeric: tabular-nums; }
 .no.none { color: var(--muted); }
 .who { min-width: 0; }
@@ -927,7 +932,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
           <header class="sec-head">
             <div>
               <h2 id="h-people">參加者名單</h2>
-              <p class="sub">抽獎編號只發給符合資格的人，看不符合的原因可以幫你檢查條件。</p>
+              <p class="sub">抽獎編號只發給符合資格的人，看不符合的原因可以幫你檢查條件。不讓某位參加，就按那一行的「排除」。</p>
             </div>
           </header>
           <div class="people-tools">
@@ -988,7 +993,7 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
           </ul>
           <div class="field">
             <label class="field-label" for="r-exclude">排除名單</label>
-            <textarea id="r-exclude" rows="2" placeholder="不參加抽獎的人，例如粉專小編、工作人員。每行一個名字。"></textarea>
+            <textarea id="r-exclude" rows="2" placeholder="不參加抽獎的人，例如粉專小編、工作人員。每行一個名字，也可以在參加者名單按「排除」。"></textarea>
           </div>
         </section>
 
@@ -1856,7 +1861,24 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
       box.replaceChildren(el('p', { class: 'hint' }, '還沒有名單。先貼上留言者名單，或匯入 CSV 檔。'));
       return;
     }
-    box.replaceChildren.apply(box, [el('p', { class: 'batches-title' }, '已匯入的名單')].concat(
+    // 全部移除: every imported list at once. Rules and prizes stay; the sample data is cleared as a whole.
+    var clearAll = el('button', { type: 'button', class: 'btn btn-ghost danger', id: 'btn-clear-lists' }, '全部移除');
+    twoStep(clearAll, '確定全部移除？', function () {
+      if (clearSampleIfNeeded()) {
+        save();
+        renderAll();
+        toast('範例已清除，從第 1 步貼上你的名單開始');
+        return;
+      }
+      var n = state.batches.length;
+      state.batches = [];
+      avGc();
+      save();
+      renderAll();
+      toast('已移除全部 ' + n + ' 份名單，條件和獎品都還在');
+    });
+    var head = el('div', { class: 'batches-head' }, el('p', { class: 'batches-title' }, '已匯入的名單（' + state.batches.length + ' 份）'), clearAll);
+    box.replaceChildren.apply(box, [head].concat(
       state.batches.map(function (b) {
         var rm = el('button', { type: 'button', class: 'btn btn-ghost' }, '移除');
         twoStep(rm, '確定移除？', function () {
@@ -1885,6 +1907,13 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
     if (w) status = el('span', { class: 'pill ' + (w.void ? 'pill-void' : 'pill-won') }, w.void ? '已作廢' : '已得獎');
     else if (p.eligible) status = el('span', { class: 'pill pill-ok' }, '符合');
     else status = el('span', { class: 'pill pill-warn' }, '不符合');
+    // 排除 / 恢復 by hand, until the draw starts (then the list is locked like the rules).
+    var act = null;
+    if (!w && !state.winners.length && !busy) {
+      var out = p.reasons.indexOf('在排除名單') !== -1;
+      act = el('button', { type: 'button', class: 'btn btn-ghost', 'data-key': p.key, 'aria-label': (out ? '恢復 ' : '排除 ') + p.name, title: out ? '從排除名單拿掉，恢復參加資格' : '加進排除名單，這次不參加抽獎' }, out ? '恢復' : '排除');
+      act.addEventListener('click', function () { setExcluded(p, !out); });
+    }
     var showHandle = isAtHandle(p.handle) && normKey(p.handle) !== normKey(p.name);
     var href = safeUrl(p.url);
     return el('li', { class: 'person' },
@@ -1895,8 +1924,27 @@ input:disabled, textarea:disabled, select:disabled, button:disabled { opacity: .
         meta.length ? el('div', { class: 'meta' }, meta.map(function (m) { return el('span', null, m); })) : null,
         p.reasons.length ? el('div', { class: 'reasons' }, p.reasons.join('、')) : null
       ),
-      status
+      el('div', { class: 'p-side' }, status, act)
     );
+  }
+  // A hand-picked exclusion goes into step 2's 排除名單, so every exclusion stays in one list that
+  // people can read and edit, and the log counts it. Names are unique among people (records with
+  // the same name merge), so the name is used, or the @handle on X / Threads.
+  function exclusionEntry(p) {
+    if (isAtHandle(p.handle) || (p.handle && /[,，、;；]/.test(p.name))) return p.handle;
+    return p.name;
+  }
+  function setExcluded(p, on) {
+    var same = function (x) { var k = normKey(x); return k === normKey(p.name) || (!!p.handle && k === normKey(p.handle)); };
+    var list = splitList(state.rules.exclude).filter(function (x) { return !same(x); });
+    if (on) list.push(exclusionEntry(p));
+    state.rules.exclude = list.join('\n');
+    syncRuleInputs();
+    save();
+    renderAll();
+    toast(on ? '已排除 ' + p.name + '，名字放進了第 2 步的排除名單' : '已恢復 ' + p.name + '，從排除名單拿掉了');
+    var again = $$('#people [data-key]').filter(function (b) { return b.dataset.key === p.key; })[0];
+    if (again) again.focus();
   }
   function renderPeople(ev) {
     var f = state.ui.filter || 'all';

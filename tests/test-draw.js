@@ -33,6 +33,17 @@ const url = SITE + 'draw.html';
   })));
   check(pos.people[1] === pos.import[1] && pos.people[0] > pos.import[0] && pos.rules[1] > pos.import[1], 'roster sits beside step 1 on wide screens ' + JSON.stringify(pos));
   check((await txt('#next-text')) === '參加者 23 位，符合資格 14 位；3 個獎項，共 6 個名額。' && await page.isHidden('#next-warn'), '去抽獎 bar sums up the setup');
+
+  // Picking someone out by hand: 排除 puts the name in step 2's exclusion list, 恢復 takes it out again
+  const xm = page.locator('#people .person', { hasText: '陳小明' });
+  check(await page.locator('#people .p-side .btn').count() === 23 && (await page.locator('#people .person', { hasText: '小編' }).locator('.p-side .btn').textContent()) === '恢復', 'every roster row has 排除, the excluded 小編 has 恢復');
+  await xm.locator('.p-side .btn').click();
+  await page.waitForTimeout(100);
+  const xmOut = { eligible: await txt('#s-eligible'), list: await page.$eval('#r-exclude', n => n.value), reason: await xm.locator('.reasons').textContent(), btn: await xm.locator('.p-side .btn').textContent(), focus: await page.evaluate(() => document.activeElement.textContent) };
+  check(xmOut.eligible === '13' && xmOut.list === '小編\n陳小明' && xmOut.reason.includes('在排除名單') && xmOut.btn === '恢復' && xmOut.focus === '恢復', '排除 disqualifies 陳小明 and adds the name to the exclusion list ' + JSON.stringify(xmOut));
+  await xm.locator('.p-side .btn').click();
+  await page.waitForTimeout(100);
+  check(await txt('#s-eligible') === '14' && (await page.$eval('#r-exclude', n => n.value)) === '小編' && (await xm.locator('.p-side .btn').textContent()) === '排除', '恢復 puts 陳小明 back');
   await page.click('#btn-go-draw');
   await page.waitForTimeout(150);
   const under = await page.evaluate(() => ({ bar: Math.round(document.querySelector('.views-bar').getBoundingClientRect().bottom), stage: Math.round(document.getElementById('stage').getBoundingClientRect().top) }));
@@ -58,6 +69,7 @@ const url = SITE + 'draw.html';
   check(/抽獎池還有 13 位/.test(await txt('#pool-line')), 'pool shrinks to 13 after a draw');
   check(await page.isDisabled('#paste'), 'import locked after drawing starts');
   check(await page.isDisabled('#r-like'), 'rules locked after drawing starts');
+  check(await page.locator('#people .p-side .btn').count() === 0 && await page.isDisabled('#btn-clear-lists'), 'no 排除 or 全部移除 once the draw has started');
   await page.screenshot({ path: path.join(OUT, 'shot-draw-desktop.png'), fullPage: true });
 
   // Locked rules stay readable: a ticked box keeps its colour, rules that are not used step back
@@ -188,6 +200,15 @@ const url = SITE + 'draw.html';
   await page.click('#btn-add-prize');
   check(await page.locator('#prize-list .prize-row').count() === 2, 'prize added');
 
+  // 全部移除: one button (pressed twice) clears every imported list; the rules and prizes stay
+  check((await txt('#batches .batches-title')) === '已匯入的名單（5 份）', 'the import step counts the lists');
+  await page.click('#btn-clear-lists');
+  check((await txt('#btn-clear-lists')) === '確定全部移除？', '全部移除 asks for confirmation');
+  await page.click('#btn-clear-lists');
+  await page.waitForTimeout(100);
+  check(await txt('#s-people') === '0' && await page.locator('#batches .batch').count() === 0 && await page.isChecked('#r-like') && await page.$eval('#r-exclude', n => n.value) === 'eve' && await page.locator('#prize-list .prize-row').count() === 2, '全部移除 clears the lists and keeps the rules and prizes');
+  check((await txt('#toast')).includes('已移除全部 5 份名單'), '全部移除 says what it did');
+
   // ---------- Animated draw + mobile + dark screenshots ----------
   const ctx2 = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, colorScheme: 'dark' });
   await serveSite(ctx2);
@@ -212,6 +233,20 @@ const url = SITE + 'draw.html';
   check(overflow <= 0, 'no horizontal overflow at 390px (overflow ' + overflow + ')');
   await p2.locator('#stage').screenshot({ path: path.join(OUT, 'shot-draw-mobile-dark-stage.png') });
   await p2.screenshot({ path: path.join(OUT, 'shot-draw-mobile-dark.png'), fullPage: true });
+
+  // 全部移除 on the sample data clears the sample as a whole (its made-up rules and prizes too)
+  const ctx3 = await browser.newContext({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1 });
+  await serveSite(ctx3);
+  const p3 = await ctx3.newPage();
+  p3.on('pageerror', e => errors.push('s pageerror: ' + e.message));
+  await p3.goto(url);
+  await p3.waitForTimeout(300);
+  await p3.click('#btn-clear-lists');
+  await p3.click('#btn-clear-lists');
+  await p3.waitForTimeout(100);
+  const s3 = await p3.evaluate(() => ({ people: document.getElementById('s-people').textContent, banner: document.getElementById('sample-banner').hidden, like: document.getElementById('r-like').checked, prizes: document.querySelectorAll('#prize-list .prize-row').length, exclude: document.getElementById('r-exclude').value }));
+  check(s3.people === '0' && s3.banner && !s3.like && s3.prizes === 1 && s3.exclude === '', '全部移除 on the sample clears the sample data ' + JSON.stringify(s3));
+  await ctx3.close();
 
   check(!errors.length, 'no page errors ' + JSON.stringify(errors));
   await browser.close();

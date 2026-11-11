@@ -141,6 +141,15 @@ const sample = (name) => {
   await page.click('#btn-add');
   await page.waitForTimeout(150);
   check(await txt('#s-people') === String(22 + 33) && await page.isHidden('#tool-banner'), 'draw: X replies added, newest-tool result clears the banner');
+  // 排除 on an X reply writes the @handle (unique on X) into the exclusion list
+  const u1 = page.locator('#people .person', { has: page.locator('.handle', { hasText: /^@user_1$/ }) });
+  const before = await txt('#s-eligible');
+  await u1.locator('.p-side .btn').click();
+  await page.waitForTimeout(100);
+  check(await page.$eval('#r-exclude', n => n.value) === '@user_1' && Number(await txt('#s-eligible')) === Number(before) - 1, 'draw: 排除 on an X reply adds @user_1 to the exclusion list');
+  await u1.locator('.p-side .btn').click();
+  await page.waitForTimeout(100);
+  check(await page.$eval('#r-exclude', n => n.value) === '' && await txt('#s-eligible') === before, 'draw: 恢復 takes @user_1 out again');
   await page.click('.view-tab[data-view="draw"]');
   await page.click('#btn-draw');
   await page.waitForFunction(() => document.getElementById('ticket').dataset.mode === 'won', null, { timeout: 8000 });
