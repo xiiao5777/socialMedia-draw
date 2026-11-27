@@ -204,22 +204,34 @@ function evilPage() {
   return `<!doctype html><html><head>${common}</head><body><p>Not the collector</p></body></html>`;
 }
 
+// An X post. Until late 2026 its time was a <time datetime> in the post's link. Since then (t.plain)
+// it is plain text, in the link or (t.nolink) not a link at all; the views count links to
+// /status/<id>/analytics, the buttons are <button>s that say their numbers, and the bar has no label.
 function xArticle(t) {
-  return `<article data-testid="tweet" role="article" tabindex="0">
-    <div data-testid="Tweet-User-Avatar"><a href="/${t.handle}" role="link"><img alt="" width="40" height="40" src="https://pbs.twimg.com/profile_images/1${t.id}/${t.handle}_normal.jpg"></a></div>
-    <div data-testid="User-Name"><a href="/${t.handle}" role="link"><span>${t.name}</span></a><a href="/${t.handle}" role="link" tabindex="-1"><span>@${t.handle}</span></a><a href="/${t.handle}/status/${t.id}" role="link"><time datetime="${t.time || '2026-11-10T10:00:00.000Z'}">${t.focal ? '10:00 AM · Nov 10, 2026' : '2h'}</time></a></div>
+  const when = t.focal ? '10:00 AM · Nov 10, 2026' : (t.when || '2h');
+  const time = !t.plain ? `<a href="/${t.handle}/status/${t.id}" role="link"><time datetime="${t.time || '2026-11-10T10:00:00.000Z'}">${when}</time></a>`
+    : t.nolink ? `<span>·</span><span>${when}</span>` : `<span>·</span><a href="/${t.handle}/status/${t.id}" role="link"><span>${when}</span></a>`;
+  const bar = !t.plain ? `<div role="group"${t.stats ? ` aria-label="${t.stats}"` : ''}><div role="button" aria-label="3 replies"><span>3</span></div></div>`
+    : `<div role="group">${(t.buttons || ['3 則回覆。回覆', '0 則轉發。轉發', '1 個喜歡。喜歡']).map(l => `<button type="button" aria-label="${l}"><span>${l.replace(/\D.*$/, '')}</span></button>`).join('')}<a href="/${t.handle}/status/${t.id}/analytics" role="link" aria-label="35 次觀看。查看貼文分析"><span>35</span></a></div>`;
+  return `<article data-testid="tweet"${t.plain ? '' : ' role="article"'} tabindex="0">
+    <div data-testid="Tweet-User-Avatar"><a href="/${t.handle}" role="link"><img alt="" width="40" height="40" src="https://pbs.twimg.com/profile_images/${t.av || '1' + t.id}/${t.handle}_normal.jpg"></a></div>
+    <div data-testid="User-Name"><a href="/${t.handle}" role="link"><span>${t.name}</span></a><a href="/${t.handle}" role="link" tabindex="-1"><span>@${t.handle}</span></a>${time}</div>
     <div data-testid="tweetText"><span>${t.text}</span>${(t.tags || []).map(h => ` <a href="/${h}" role="link">@${h}</a>`).join('')}</div>
-    <div role="group"${t.stats ? ` aria-label="${t.stats}"` : ''}><div role="button" aria-label="3 replies"><span>3</span></div></div>
+    ${bar}
   </article>`;
 }
+// An X post id, which holds its time (ms since 2010-11-04, shifted by 22 bits)
+function xId(ms, seq) { return ((BigInt(ms) - 1288834974657n) << 22n | BigInt(seq)).toString(); }
 
 function xPostPage() {
+  // X since late 2026: no <time> (the time is in the id), and every 7th reply's time is not a link
   const replies = Array.from({ length: 30 }, (_, i) => ({
-    id: String(1000 + i), handle: 'user_' + i, name: 'User ' + i, time: new Date(Date.UTC(2026, 10, 10, 11 + i)).toISOString(),
+    id: xId(Date.UTC(2026, 10, 10, 11 + i), 1000 + i), av: String(11000 + i), plain: true, nolink: i % 7 === 3, when: (i + 1) + '小時',
+    handle: 'user_' + i, name: 'User ' + i,
     text: i % 6 === 5 ? 'nice' : '我要抽', tags: i % 6 === 5 ? [] : ['friend_' + i, 'friend_' + (i + 1)]
   }));
-  replies.splice(4, 0, { id: '999', handle: 'brand', name: 'Brand', text: '謝謝大家', tags: [] });
-  const hiddenMore = Array.from({ length: 3 }, (_, i) => ({ id: String(2000 + i), handle: 'late_' + i, name: 'Late ' + i, text: '我要抽', tags: ['a', 'b'] }));
+  replies.splice(4, 0, { id: '999', handle: 'brand', name: 'Brand', text: '謝謝大家', tags: [], plain: true });
+  const hiddenMore = Array.from({ length: 3 }, (_, i) => ({ id: xId(Date.UTC(2026, 10, 12, 9 + i), 2000 + i), av: String(12000 + i), plain: true, handle: 'late_' + i, name: 'Late ' + i, text: '我要抽', tags: ['a', 'b'] }));
   return `<!doctype html><html><head>${common}</head><body>
   <div data-testid="sidebarColumn"><a href="/trending_guy">Trending guy</a></div>
   <main><div data-testid="primaryColumn">
@@ -228,8 +240,8 @@ function xPostPage() {
   </div></main>
   <script>
     window.__xArticle = ${xArticle.toString()};
-    const parent = { id: '100', handle: 'someone', name: 'Someone', text: 'parent post' };
-    const focal = { id: '111', handle: 'brand', name: 'Brand', text: '抽獎！回覆我要抽並標記 2 位朋友', focal: true, stats: '34 replies, 12 reposts, 25 likes, 3 bookmarks, 4512 views' };
+    const parent = { id: '100', handle: 'someone', name: 'Someone', text: 'parent post', plain: true };
+    const focal = { id: '111', handle: 'brand', name: 'Brand', text: '抽獎！回覆我要抽並標記 2 位朋友', focal: true, plain: true, buttons: ['34 則回覆。回覆', '12 則轉發。轉發', '25 個喜歡。喜歡'] };
     const replies = ${JSON.stringify(replies)};
     const hiddenMore = ${JSON.stringify(hiddenMore)};
     // X folds replies away behind buttons, one after another (its English one is long): one reply each

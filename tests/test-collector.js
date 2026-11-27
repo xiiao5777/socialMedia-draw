@@ -6,6 +6,8 @@ const mocks = require('./mocks.js');
 const { colorOf, serveImage } = require('./avatars-mock.js');
 const { SITE, OUT, launch, serveSiteFile, serveNoFonts, bookmarklet, version, check, done, pasteInto } = require('./helpers.js');
 const BM = bookmarklet();
+// An X post id, which holds its time (as in mocks.js)
+const xId = (ms, seq) => ((BigInt(ms) - 1288834974657n) << 22n | BigInt(seq)).toString();
 const code = BM.code;
 const VER = version();
 
@@ -206,8 +208,13 @@ async function avatarMatches(page, dataUrl, srcUrl) {
   check(x && !x.items.some(i => i.handle === '@brand' || i.handle === '@someone'), 'X: main post, parent post and owner reply skipped');
   const u0 = x && x.items.find(i => i.handle === '@user_0');
   check(u0 && u0.name === 'User 0' && u0.tags && u0.tags.join() === '@friend_0,@friend_1', 'X: name, handle and mention tags (' + JSON.stringify(u0) + ')');
-  check(u0 && u0.url === 'https://x.com/user_0' && u0.link === 'https://x.com/user_0/status/1000', 'X: profile link and reply link');
-  check(u0 && u0.time === '2026-11-10T11:00:00.000Z' && !u0.timeFrom && x.items.find(i => i.handle === '@user_3').time === '2026-11-10T14:00:00.000Z', 'X: each reply has its exact time (' + (u0 && u0.time) + ')');
+  check(u0 && u0.url === 'https://x.com/user_0' && u0.link === 'https://x.com/user_0/status/' + xId(Date.UTC(2026, 10, 10, 11), 1000), 'X: profile link and reply link');
+  // X draws no <time> any more (HW's post: 26 posts, 0 times, 0 replies read): the post's link gives its id, and the id its time
+  const u3 = x && x.items.find(i => i.handle === '@user_3');
+  check(u3 && u3.link === 'https://x.com/user_3/status/' + xId(Date.UTC(2026, 10, 10, 14), 1003) && u3.text === '我要抽 @friend_3 @friend_4',
+    'X: a reply whose time is not a link is found by its views link (' + (u3 && u3.link) + ')');
+  check(u0 && u0.time === '2026-11-10T11:00:00.000Z' && !u0.timeFrom && u3.time === '2026-11-10T14:00:00.000Z' && x.items.every(i => i.time && !i.timeFrom),
+    'X: each reply has its exact time, read from its id (' + (u0 && u0.time) + ')');
   check(/略過貼文作者/.test(r.panelText), 'X: panel reports skipped owner replies');
   // X's "34 replies" counts the author's own reply, which is skipped: complete, so no 「33 / 34」 that reads as one missing
   check(await countLine(r.page) === '33則留言' && !await hasGoOn(r.page) && r.panelText.includes('✓ 抓完了，畫面上看得到的回覆都抓到了。X 上顯示 34 則，是只算直接回覆這篇貼文的留言'),
