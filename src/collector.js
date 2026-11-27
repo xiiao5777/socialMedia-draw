@@ -5,7 +5,7 @@
 (function () {
   'use strict';
   // Keep in step with COLLECTOR_VERSION in draw.html (build.js checks).
-  var VERSION = '1.9';
+  var VERSION = '1.10';
   // The 抽獎系統 page, filled in by build.js from the site address.
   var DRAW_URL = '__DRAW_URL__';
   var DRAW_ORIGIN = (DRAW_URL.match(/^https:\/\/[^/]+/) || [''])[0];
@@ -350,6 +350,13 @@
     var g = art && art.querySelector('[role="group"][aria-label]');
     var l = g ? g.getAttribute('aria-label') : '';
     for (var k in X_COUNT) { var m = l && X_COUNT[k].exec(l), c = m && countOf(m[1]); if (c) S.counts[k] = c; }
+    // No label on the bar: each button says its own number (「34 則回覆。回覆」)
+    if (art && !l) {
+      $$(art, 'button[aria-label], [role="button"][aria-label]').forEach(function (b) {
+        var bl = b.getAttribute('aria-label');
+        for (var k2 in X_COUNT) { var m2 = X_COUNT[k2].exec(bl), c2 = m2 && countOf(m2[1]); if (c2 && !S.counts[k2]) S.counts[k2] = c2; }
+      });
+    }
   }
   function thCounts() {
     var id = mainPostId();
@@ -504,11 +511,30 @@
   }
 
   // X replies: article[data-testid=tweet] after the main post.
+  // A post's own address: /<author>/status/<id>, nothing after the id
+  var X_PERMA = /^(?:https:\/\/(?:x|twitter)\.com)?\/([A-Za-z0-9_]{1,15})\/status\/(\d+)\/?(?:[?#].*)?$/;
   function xStatusId(art) {
     var t = art.querySelector('a[href*="/status/"] time');
     var a = t && t.closest('a');
     var m = a && (a.getAttribute('href') || '').match(/\/status\/(\d+)/);
-    return m ? m[1] : null;
+    if (m) return m[1];
+    // Since late 2026 X writes the time as plain text (no <time>; HW's post had 26 posts and no time).
+    // Then: the post's link in its name row, its views count (/status/<id>/analytics), or a link to
+    // a post by its author anywhere in it.
+    var un = art.querySelector('[data-testid="User-Name"]');
+    var au = (un && profileLinks(un)[0]) || profileLinks(art)[0];
+    var who = au ? hrefHandle(au).slice(1).toLowerCase() : '';
+    function own(links) {
+      for (var i = 0; i < links.length; i++) {
+        var p = (links[i].getAttribute('href') || '').match(X_PERMA);
+        if (p && (!who || p[1].toLowerCase() === who)) return p[2];
+      }
+      return null;
+    }
+    var id = un ? own($$(un, 'a[href*="/status/"]')) : null;
+    if (id) return id;
+    var v = $$(art, 'a[href*="/status/"]').map(function (x) { return (x.getAttribute('href') || '').match(/\/status\/(\d+)\/analytics\/?$/); }).filter(Boolean)[0];
+    return v ? v[1] : own($$(art, 'a[href*="/status/"]'));
   }
   function xAuthor(root) {
     var un = root.querySelector('[data-testid="User-Name"]') || root;
@@ -525,7 +551,7 @@
       var au = xAuthor(art);
       if (!au) return;
       if (isOwner(au.handle)) { S.skippedOwner.add(id); return; }
-      var tt = art.querySelector('[data-testid="tweetText"]');
+      var tt = art.querySelector('[data-testid="tweetText"]') || art.querySelector('div[lang][dir="auto"]');
       var tags = tt ? profileLinks(tt).map(hrefHandle).filter(function (h) { return h && h !== au.handle; }) : [];
       put('x:' + id, withTime({ name: au.name, handle: au.handle, text: txt(tt), tags: uniq(tags), url: profileUrl(au.handle), link: 'https://x.com/' + au.handle.slice(1) + '/status/' + id }, art.querySelector('a[href*="/status/"] time'), id), art);
       grabAvatar(personKey(au.handle), function () { return xAvatar(art, au.handle); });
@@ -801,8 +827,18 @@
       profileLinks: profileLinks(document).length,
       dirAuto: $$(document, '[dir="auto"]').length,
       labels: $$(document, '[role="article"][aria-label]').slice(0, 5).map(function (a) { return (a.getAttribute('aria-label') || '').slice(-14); }),
-      buttons: uniq($$(document, '[role="button"]').map(txt).filter(function (t) { return t && t.length < 24; })).slice(0, 30)
+      buttons: uniq($$(document, '[role="button"], button').map(txt).filter(function (t) { return t && t.length < 24; })).slice(0, 30)
     };
+    if (platform === 'x') {
+      var arts = $$(S.scope, 'article');
+      d.x = {
+        scope: S.scope === document ? 'document' : (S.scope.getAttribute && (S.scope.getAttribute('data-testid') || S.scope.getAttribute('role'))) || '?',
+        inScope: arts.length, withId: arts.map(xStatusId).filter(Boolean).length, skip: S.skipIds.size, owner: S.skippedOwner.size,
+        userName: $$(document, '[data-testid="User-Name"]').length, tweetText: $$(document, '[data-testid="tweetText"]').length,
+        statusLinks: $$(document, 'a[href*="/status/"]').length, analytics: $$(document, 'a[href$="/analytics"]').length,
+        counts: S.counts
+      };
+    }
     return JSON.stringify(d);
   }
 

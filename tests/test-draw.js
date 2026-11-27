@@ -213,6 +213,8 @@ const url = SITE + 'draw.html';
   check(await txt('#s-eligible') === '1', 'keyword rule leaves Eve only (got ' + await txt('#s-eligible') + ')');
   await page.uncheck('#r-kw');
   await page.waitForTimeout(100);
+  // The page saves 150 ms after the last change: wait for it instead of reading too early
+  await page.waitForFunction(() => (JSON.parse(localStorage.getItem('giveaway-draw:v1:other') || '{}').rules || {}).needKeyword === false, null, { timeout: 3000 }).catch(() => {});
   check(await txt('#s-eligible') === '2' && await page.evaluate(() => JSON.parse(localStorage.getItem('giveaway-draw:v1:other')).rules.needKeyword) === false, 'unticking the keyword rule turns it off (got ' + await txt('#s-eligible') + ')');
   await page.check('#r-kw');
   await page.waitForTimeout(100);
